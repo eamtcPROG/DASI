@@ -8,13 +8,16 @@ NestJS service responsible for user registration, sign-in, JWT issuance, and tok
 
 - [Prerequisites](#prerequisites)
 - [Running the Service](#running-the-service)
+- [Scripts](#scripts)
 - [Environment Variables](#environment-variables)
+- [Database Seeding](#database-seeding)
 - [HTTP API](#http-api)
 - [Authentication (JWT)](#authentication-jwt)
 - [Message-Based API (RabbitMQ)](#message-based-api-rabbitmq)
 - [Response Format](#response-format)
 - [Swagger Documentation](#swagger-documentation)
 - [Integration Guide for Other Services](#integration-guide-for-other-services)
+- [Tests](#tests)
 
 ---
 
@@ -64,13 +67,28 @@ Identity service will be at `http://localhost:3001`.
 
 ---
 
+## Scripts
+
+| Script | Description |
+|--------|-------------|
+| `npm run start:dev` | Start in development with watch (uses `env/.env.development`) |
+| `npm run start:prod` | Run production build (`node dist/main`) |
+| `npm run build` | Build the NestJS app to `dist/` |
+| `npm run test` | Run unit tests |
+| `npm run test:e2e` | Run E2E tests (requires DB and `env/.env.test`) |
+| `npm run seed` | Seed database with default users (see [Database Seeding](#database-seeding)) |
+| `npm run seed:run` | Run seed from compiled `dist/` (after `npm run build`) |
+| `npm run lint` | Run ESLint with fix |
+
+---
+
 ## Environment Variables
 
 | Variable           | Description                    | Example                    |
 |--------------------|--------------------------------|----------------------------|
 | `NODE_ENV`         | Environment                    | `development`, `production`|
 | `PORT`             | HTTP server port               | `3001`                     |
-| `VERSION`          | API version (e.g. for Swagger) | `1.0.0`                    |
+| `VERSION`          | API version (required; used in Swagger) | `1.0.0`                    |
 | `POSTGRES_USER`    | PostgreSQL user                | `postgres`                 |
 | `POSTGRES_PASSWORD`| PostgreSQL password            | `postgres`                 |
 | `POSTGRES_DB`      | PostgreSQL database name      | `identity`                 |
@@ -80,7 +98,24 @@ Identity service will be at `http://localhost:3001`.
 | `JWT_EXPIRES_IN`   | Token TTL in seconds           | `3600`                     |
 | `RABBITMQ_URI`     | RabbitMQ connection URL        | `amqp://localhost:5672`    |
 
-Config is loaded from `env/.env.${NODE_ENV}` (e.g. `env/.env.development`).
+Config is loaded from `env/.env.${NODE_ENV}` (e.g. `env/.env.development`). `PORT`, `VERSION`, and `RABBITMQ_URI` are required at startup.
+
+---
+
+## Database Seeding
+
+To populate the database with default users, run:
+
+```bash
+npm run seed
+```
+
+This uses `env/.env.development` (or `NODE_ENV` if set). Seed users are created only if they do not already exist:
+
+| Email | Password | Name |
+|-------|----------|------|
+| `admin@example.com` | `password123` | Admin User |
+| `dev@example.com` | `password123` | Dev User |
 
 ---
 
@@ -271,7 +306,10 @@ When the service is running, interactive API docs are available at:
 
 **http://localhost:3001/api**
 
-Use Swagger to try endpoints and see exact request/response schemas. Use “Authorize” to set a Bearer token for protected routes.
+- **Title:** API Identity Service  
+- **Description:** HTTP API for the Identity service — manage identities, authentication, and identity-related operations with versioned endpoints, validation, and standard error responses.
+
+Use Swagger to try endpoints and see exact request/response schemas. Use **Authorize** to set a Bearer token for protected routes.
 
 ---
 
@@ -299,8 +337,8 @@ Use Swagger to try endpoints and see exact request/response schemas. Use “Auth
 # Unit tests
 npm run test
 
-# E2E tests (require DB and env, e.g. NODE_ENV=test)
-npm run test:e2e
+# E2E tests (require DB and env)
+NODE_ENV=test npm run test:e2e
 ```
 
-Use `env/.env.test` for E2E configuration (see `test/jest-e2e.json` and test helpers).
+E2E tests use `env/.env.test` and `test/jest-e2e.json`. Ensure PostgreSQL (and optionally RabbitMQ) are available for E2E runs.
