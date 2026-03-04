@@ -1,0 +1,43 @@
+# Test stack for e2e: Postgres (identity_test) + RabbitMQ.
+# Start from services/: docker compose -f docker-compose.test.yaml up -d
+# Then run e2e: cd identity && npm run test:e2e
+# Stop: docker compose -f docker-compose.test.yaml down
+
+name: dasi-test
+
+services:
+  postgres-identity-test:
+    image: postgres:16-alpine
+    container_name: postgres-identity-test
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: identity_test
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres-identity-test-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - dasi-test-net
+
+  rabbitmq-test:
+    image: rabbitmq
+    container_name: rabbitmq-test
+    ports:
+      - 5672:5672
+    networks:
+      - dasi-test-net
+
+volumes:
+  postgres-identity-test-data:
+
+networks:
+  dasi-test-net:
+    driver: bridge

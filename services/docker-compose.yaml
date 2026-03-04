@@ -1,0 +1,56 @@
+name: dasi
+services:
+  identity:
+    container_name: identity-service
+    build:
+      context: ./identity
+      dockerfile: Dockerfile
+    command: npm run start:prod
+    ports:
+      - 3001:3001
+    volumes:
+      - ./identity:/app
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      - postgres-identity
+      - rabbitmq
+    networks:
+      - dasi-net
+
+  
+  postgres-identity:
+    image: postgres:16-alpine
+    container_name: postgres-identity
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: identity
+      PGDATA: /var/lib/postgresql/data/pgdata 
+    volumes:
+      - postgres-identity-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - dasi-net
+  
+
+  rabbitmq:
+    image: rabbitmq
+    container_name: rabbitmq
+    ports:
+      - 5672:5672
+    networks:
+      - dasi-net
+
+volumes:
+  postgres-identity-data:
+networks:
+  dasi-net:
+    driver: bridge
