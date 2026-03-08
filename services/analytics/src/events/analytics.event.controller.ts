@@ -1,5 +1,5 @@
 import { Controller } from '@nestjs/common';
-import { EventPattern, Payload, Ctx, RmqContext } from '@nestjs/microservices';
+import { MessagePattern, Payload, Ctx, RmqContext } from '@nestjs/microservices';
 import { AnalyticsService } from '../services/analytics.service';
 import { ResultObjectDto } from '../dto/resultobject.dto';
 
@@ -7,7 +7,7 @@ import { ResultObjectDto } from '../dto/resultobject.dto';
 export class AnalyticsEventController {
   constructor(private readonly analyticsService: AnalyticsService) {}
 
-  @EventPattern('get_analytics')
+  @MessagePattern('get_analytics')
   async handleGetAnalytics(
     @Payload() data: { type: 'messages' | 'users' | 'general' },
     @Ctx() context: RmqContext,
