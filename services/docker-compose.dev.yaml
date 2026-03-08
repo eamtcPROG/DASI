@@ -21,7 +21,27 @@ services:
       start_period: 10s
     networks:
       - dasi-net
-  
+
+  postgres-analytics:
+    image: postgres:16-alpine
+    container_name: postgres-analytics
+    ports:
+      - 5433:5432
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: analytics
+      PGDATA: /var/lib/postgresql/data/pgdata 
+    volumes:
+      - postgres-analytics-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - dasi-net
 
   rabbitmq:
     image: rabbitmq
@@ -33,6 +53,7 @@ services:
 
 volumes:
   postgres-identity-data:
+  postgres-analytics-data:
 networks:
   dasi-net:
     driver: bridge
