@@ -1,5 +1,24 @@
 name: dasi
 services:
+  gateway:
+    container_name: gateway-service
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    command: npm run start:prod
+    ports:
+      - 3000:3000
+    volumes:
+      - ./gateway:/app
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      - identity
+      - analytics
+      - rabbitmq
+    networks:
+      - dasi-net
+
   identity:
     container_name: identity-service
     build:

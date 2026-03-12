@@ -12,6 +12,7 @@ import { UserController } from './controllers/user.controller';
 import { User } from './models/user.model';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthEventController } from './events/auth.event.controller';
+import { IdentityEventController } from './events/identity.event.controller';
 
 @Module({
   imports: [
@@ -47,7 +48,7 @@ import { AuthEventController } from './events/auth.event.controller';
       inject: [ConfigService],
     }),
   ],
-  controllers: [UserController, AuthEventController],
+  controllers: [UserController, AuthEventController, IdentityEventController],
   providers: [
     UserService,
     AuthService,
