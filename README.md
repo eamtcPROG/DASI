@@ -153,6 +153,25 @@ The Next.js client supports:
 - `pnpm build`
 - `pnpm lint`
 
+## Containerized stack
+
+From `services/`, start the full production-style stack with one command:
+
+```bash
+docker compose up --build
+```
+
+This starts:
+
+- `client` on `localhost:3100`
+- `gateway` on `localhost:3000`
+- `identity` on `localhost:3001`
+- `analytics` on `localhost:3002`
+- `postgres-identity` on `localhost:5432`
+- `postgres-analytics` on `localhost:5433`
+- `rabbitmq` on `localhost:5672`
+- `redis` on `localhost:6379`
+
 ## Testing notes
 
 - Backend e2e tests require the test stack from `services/docker-compose.test.yaml`.

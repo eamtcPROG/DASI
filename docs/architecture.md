@@ -224,14 +224,14 @@ Application services are started manually from their own directories in developm
 
 `services/docker-compose.yaml` starts:
 
+- `client`
 - `gateway`
 - `identity`
 - `analytics`
 - `postgres-identity`
 - `postgres-analytics`
 - `rabbitmq`
-
-The Next.js client is not part of that compose file and is expected to run separately.
+- `redis`
 
 ### Test stack
 
