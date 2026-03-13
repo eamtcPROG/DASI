@@ -1,11 +1,13 @@
 "use client"
 
 import { useState } from "react"
+
 import { SidebarHeader } from "@/components/chat/sidebar-header"
 import { ChatList } from "@/components/chat/chat-list"
 import { ChatHeader } from "@/components/chat/chat-header"
 import { MessageList } from "@/components/chat/message-list"
 import { MessageInput } from "@/components/chat/message-input"
+import { type UserDto } from "@/lib/auth"
 import { cn } from "@/lib/utils"
 
 const DEMO_CHATS = [
@@ -16,7 +18,10 @@ const DEMO_CHATS = [
   { id: "5", name: "Emma Davis", lastMessage: "Sure, I'll send it over", time: "Yesterday", unread: 0 },
 ]
 
-const DEMO_MESSAGES: Record<string, { id: string; content: string; time: string; sent: boolean; read: boolean }[]> = {
+const DEMO_MESSAGES: Record<
+  string,
+  { id: string; content: string; time: string; sent: boolean; read: boolean }[]
+> = {
   "1": [
     { id: "1", content: "Hey! How are you?", time: "12:30", sent: false, read: true },
     { id: "2", content: "I'm good, thanks! Just finished my project.", time: "12:32", sent: true, read: true },
@@ -44,53 +49,62 @@ const DEMO_MESSAGES: Record<string, { id: string; content: string; time: string;
   ],
 }
 
-export default function ChatPage() {
+type ChatPageProps = {
+  user: UserDto
+}
+
+export function ChatPage({ user }: ChatPageProps) {
   const [selectedChat, setSelectedChat] = useState<string | null>("1")
   const [chats, setChats] = useState(DEMO_CHATS)
   const [messages, setMessages] = useState(DEMO_MESSAGES)
 
-  const selectedChatData = chats.find((c) => c.id === selectedChat)
+  const selectedChatData = chats.find((chat) => chat.id === selectedChat)
 
   const handleSendMessage = (content: string) => {
-    if (!selectedChat) return
+    if (!selectedChat) {
+      return
+    }
 
     const newMessage = {
       id: Date.now().toString(),
       content,
-      time: new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }),
+      time: new Date().toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }),
       sent: true,
       read: false,
     }
 
-    setMessages((prev) => ({
-      ...prev,
-      [selectedChat]: [...(prev[selectedChat] || []), newMessage],
+    setMessages((previousMessages) => ({
+      ...previousMessages,
+      [selectedChat]: [...(previousMessages[selectedChat] || []), newMessage],
     }))
 
-    setChats((prev) =>
-      prev.map((chat) =>
-        chat.id === selectedChat ? { ...chat, lastMessage: content, time: "Now" } : chat
-      )
+    setChats((previousChats) =>
+      previousChats.map((chat) =>
+        chat.id === selectedChat ? { ...chat, lastMessage: content, time: "Now" } : chat,
+      ),
     )
   }
 
   const handleSelectChat = (id: string) => {
     setSelectedChat(id)
-    setChats((prev) =>
-      prev.map((chat) => (chat.id === id ? { ...chat, unread: 0 } : chat))
+    setChats((previousChats) =>
+      previousChats.map((chat) => (chat.id === id ? { ...chat, unread: 0 } : chat)),
     )
   }
 
   return (
-    <div className="h-screen flex bg-background">
-      {/* Sidebar */}
+    <div className="flex h-screen bg-background">
       <aside
         className={cn(
-          "w-full md:w-80 lg:w-96 border-r border-border flex flex-col bg-card shrink-0",
-          selectedChat && "hidden md:flex"
+          "flex w-full shrink-0 flex-col border-r border-border bg-card md:w-80 lg:w-96",
+          selectedChat && "hidden md:flex",
         )}
       >
-        <SidebarHeader />
+        <SidebarHeader user={user} />
         <div className="flex-1 overflow-y-auto">
           <ChatList
             chats={chats}
@@ -100,13 +114,7 @@ export default function ChatPage() {
         </div>
       </aside>
 
-      {/* Chat Area */}
-      <main
-        className={cn(
-          "flex-1 flex flex-col",
-          !selectedChat && "hidden md:flex"
-        )}
-      >
+      <main className={cn("flex flex-1 flex-col", !selectedChat && "hidden md:flex")}>
         {selectedChat && selectedChatData ? (
           <>
             <ChatHeader
@@ -121,11 +129,11 @@ export default function ChatPage() {
             <MessageInput onSend={handleSendMessage} />
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center bg-muted/30">
+          <div className="flex flex-1 items-center justify-center bg-muted/30">
             <div className="text-center">
-              <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
                 <svg
-                  className="w-8 h-8 text-primary"
+                  className="h-8 w-8 text-primary"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -139,7 +147,7 @@ export default function ChatPage() {
                 </svg>
               </div>
               <h3 className="text-lg font-medium text-foreground">Select a conversation</h3>
-              <p className="text-sm text-muted-foreground mt-1">
+              <p className="mt-1 text-sm text-muted-foreground">
                 Choose a chat to start messaging
               </p>
             </div>

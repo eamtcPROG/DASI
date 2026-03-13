@@ -1,10 +1,34 @@
 "use client"
 
+import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { MessageCircle, Search, Settings } from "lucide-react"
+import { Spinner } from "@/components/ui/spinner"
+import { getUserDisplayName, type UserDto } from "@/lib/auth"
+import { LogOut, MessageCircle, Search } from "lucide-react"
 
-export function SidebarHeader() {
+type SidebarHeaderProps = {
+  user: UserDto
+}
+
+export function SidebarHeader({ user }: SidebarHeaderProps) {
+  const router = useRouter()
+  const [isSigningOut, setIsSigningOut] = useState(false)
+
+  const handleSignOut = async () => {
+    setIsSigningOut(true)
+
+    try {
+      await fetch("/api/auth/sign-out", {
+        method: "POST",
+      })
+    } finally {
+      router.replace("/signin")
+      router.refresh()
+    }
+  }
+
   return (
     <div className="p-3 border-b border-border bg-card">
       <div className="flex items-center justify-between mb-3">
@@ -14,9 +38,20 @@ export function SidebarHeader() {
           </div>
           <span className="font-semibold text-foreground">Messenger</span>
         </div>
-        <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
-          <Settings className="w-5 h-5" />
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleSignOut}
+          disabled={isSigningOut}
+          className="text-muted-foreground hover:text-foreground"
+          aria-label="Sign out"
+        >
+          {isSigningOut ? <Spinner className="size-4" /> : <LogOut className="w-5 h-5" />}
         </Button>
+      </div>
+      <div className="mb-3">
+        <p className="text-sm font-medium text-foreground">{getUserDisplayName(user)}</p>
+        <p className="text-xs text-muted-foreground">{user.email}</p>
       </div>
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
