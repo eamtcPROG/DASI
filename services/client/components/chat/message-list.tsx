@@ -17,36 +17,36 @@ interface MessageListProps {
 
 export function MessageList({ messages }: MessageListProps) {
   return (
-    <div className="flex flex-col gap-2 p-4">
+    <div className="mx-auto flex w-full max-w-4xl flex-col gap-3 px-4 py-6 md:px-6">
+      <div className="mx-auto rounded-full border border-border/70 bg-background/75 px-4 py-1.5 text-xs font-medium text-muted-foreground shadow-sm">
+        Today
+      </div>
+
       {messages.map((message) => (
-        <div
-          key={message.id}
-          className={cn(
-            "flex",
-            message.sent ? "justify-end" : "justify-start"
-          )}
-        >
+        <div key={message.id} className={cn("flex", message.sent ? "justify-end" : "justify-start")}>
           <div
             className={cn(
-              "max-w-[75%] px-3 py-2 rounded-2xl",
+              "max-w-[80%] rounded-3xl px-4 py-3 shadow-sm md:max-w-[70%]",
               message.sent
-                ? "bg-message-sent text-foreground rounded-br-md"
-                : "bg-message-received text-foreground rounded-bl-md border border-border"
+                ? "rounded-br-md bg-message-sent text-foreground"
+                : "rounded-bl-md border border-border/70 bg-message-received text-foreground",
             )}
           >
-            <p className="text-sm leading-relaxed">{message.content}</p>
-            <div className={cn(
-              "flex items-center gap-1 mt-1",
-              message.sent ? "justify-end" : "justify-start"
-            )}>
-              <span className="text-[10px] text-muted-foreground">{message.time}</span>
-              {message.sent && (
-                message.read ? (
-                  <CheckCheck className="w-3.5 h-3.5 text-primary" />
-                ) : (
-                  <Check className="w-3.5 h-3.5 text-muted-foreground" />
-                )
+            <p className="text-sm leading-7">{message.content}</p>
+            <div
+              className={cn(
+                "mt-2 flex items-center gap-1",
+                message.sent ? "justify-end" : "justify-start",
               )}
+            >
+              <span className="text-[10px] text-muted-foreground">{message.time}</span>
+              {message.sent ? (
+                message.read ? (
+                  <CheckCheck className="size-3.5 text-primary" />
+                ) : (
+                  <Check className="size-3.5 text-muted-foreground" />
+                )
+              ) : null}
             </div>
           </div>
         </div>

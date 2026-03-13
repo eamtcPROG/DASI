@@ -2,7 +2,8 @@
 
 import { type FormEvent, useState } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowRight } from "lucide-react"
+import { ArrowRight, Eye, EyeOff } from "lucide-react"
+import { toast } from "sonner"
 
 import {
   Alert,
@@ -25,6 +26,7 @@ export function SignInForm() {
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -48,14 +50,19 @@ export function SignInForm() {
       const result = (await response.json()) as ResultObjectDto<AuthDto>
 
       if (!response.ok || !result.object) {
-        setError(getResultMessage(result, "Unable to sign in."))
+        const message = getResultMessage(result, "Unable to sign in.")
+        setError(message)
+        toast.error(message)
         return
       }
 
+      toast.success("Signed in successfully.")
       router.replace("/chat")
       router.refresh()
     } catch {
-      setError("Unable to reach the server. Please try again.")
+      const message = "Unable to reach the server. Please try again."
+      setError(message)
+      toast.error(message)
     } finally {
       setIsSubmitting(false)
     }
@@ -63,29 +70,62 @@ export function SignInForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="space-y-3">
-        <Input
-          type="email"
-          placeholder="Email address"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          autoComplete="email"
-          className="h-12 rounded-xl bg-background px-4"
-          required
-        />
-        <Input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          autoComplete="current-password"
-          className="h-12 rounded-xl bg-background px-4"
-          required
-        />
+      <div className="rounded-2xl border border-border/70 bg-muted/35 p-4">
+        <p className="text-sm font-medium text-foreground">Use your account details</p>
+        <p className="mt-1 text-sm leading-6 text-muted-foreground">
+          Access the protected chat workspace and continue where you left off.
+        </p>
+      </div>
+
+      <div className="space-y-4">
+        <label className="block space-y-2">
+          <span className="text-sm font-medium text-foreground">Email address</span>
+          <Input
+            type="email"
+            placeholder="you@example.com"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            autoComplete="email"
+            className="h-12 rounded-2xl border-border/70 bg-background/90 px-4"
+            required
+          />
+        </label>
+
+        <label className="block space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm font-medium text-foreground">Password</span>
+            <button
+              type="button"
+              className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+              onClick={() => setShowPassword((currentValue) => !currentValue)}
+            >
+              {showPassword ? "Hide password" : "Show password"}
+            </button>
+          </div>
+          <div className="relative">
+            <Input
+              type={showPassword ? "text" : "password"}
+              placeholder="Enter your password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              autoComplete="current-password"
+              className="h-12 rounded-2xl border-border/70 bg-background/90 px-4 pr-11"
+              required
+            />
+            <button
+              type="button"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
+              onClick={() => setShowPassword((currentValue) => !currentValue)}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+            >
+              {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+            </button>
+          </div>
+        </label>
       </div>
 
       {error ? (
-        <Alert variant="destructive">
+        <Alert variant="destructive" className="rounded-2xl">
           <AlertTitle>Sign-in failed</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
@@ -93,7 +133,7 @@ export function SignInForm() {
 
       <Button
         type="submit"
-        className="h-12 w-full rounded-xl font-medium"
+        className="h-12 w-full rounded-2xl font-medium shadow-lg shadow-primary/20"
         disabled={isSubmitting}
       >
         {isSubmitting ? (
@@ -108,6 +148,10 @@ export function SignInForm() {
           </>
         )}
       </Button>
+
+      <p className="text-center text-xs leading-5 text-muted-foreground">
+        Protected by the identity service and routed through the gateway before you enter chat.
+      </p>
     </form>
   )
 }

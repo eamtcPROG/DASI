@@ -1,150 +1,333 @@
 import Link from "next/link"
 import {
+  ArrowUpRight,
   ArrowRight,
+  CheckCircle2,
   Globe,
   MessageCircle,
+  ShieldCheck,
   Shield,
+  Sparkles,
   Zap,
 } from "lucide-react"
 
+import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { Button } from "@/components/ui/button"
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen bg-background">
-      <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-        <div className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary">
-            <MessageCircle className="h-5 w-5 text-primary-foreground" />
+    <main className="min-h-screen">
+      <header className="sticky top-0 z-30 border-b border-border/60 bg-background/80 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+          <Link href="/" className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary shadow-lg shadow-primary/20">
+              <MessageCircle className="h-5 w-5 text-primary-foreground" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-foreground">Messenger</p>
+              <p className="text-xs text-muted-foreground">Protected conversations</p>
+            </div>
+          </Link>
+
+          <nav className="hidden items-center gap-6 text-sm text-muted-foreground md:flex">
+            <a href="#features" className="transition-colors hover:text-foreground">
+              Features
+            </a>
+            <a href="#experience" className="transition-colors hover:text-foreground">
+              Experience
+            </a>
+            <a href="#cta" className="transition-colors hover:text-foreground">
+              Get started
+            </a>
+          </nav>
+
+          <div className="flex items-center gap-3">
+            <ThemeToggle className="rounded-xl border-border/70 bg-background/80" />
+            <Button asChild variant="ghost" className="hidden rounded-xl sm:inline-flex">
+              <Link href="/signin">Sign in</Link>
+            </Button>
+            <Button asChild className="rounded-xl px-5 shadow-lg shadow-primary/20">
+              <Link href="/signup">Create account</Link>
+            </Button>
           </div>
-          <span className="text-lg font-semibold text-foreground">Messenger</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <Button asChild variant="ghost" className="text-muted-foreground hover:text-foreground">
-            <Link href="/signin">Sign in</Link>
-          </Button>
-          <Button asChild className="rounded-lg bg-primary text-primary-foreground hover:bg-primary/90">
-            <Link href="/signup">Get started</Link>
-          </Button>
         </div>
       </header>
 
-      <section className="relative mx-auto max-w-6xl overflow-hidden px-6 py-20 text-center">
-        <div className="absolute inset-0 -z-10">
-          <svg
-            className="absolute left-1/2 top-1/2 h-[800px] w-[800px] -translate-x-1/2 -translate-y-1/2 opacity-30 md:h-[1200px] md:w-[1200px]"
-            viewBox="0 0 800 800"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <defs>
-              <radialGradient id="greenGradient1" cx="50%" cy="50%" r="50%">
-                <stop offset="0%" stopColor="oklch(0.7 0.2 160)" stopOpacity="0.6" />
-                <stop offset="50%" stopColor="oklch(0.6 0.15 160)" stopOpacity="0.3" />
-                <stop offset="100%" stopColor="oklch(0.5 0.1 160)" stopOpacity="0" />
-              </radialGradient>
-              <radialGradient id="greenGradient2" cx="30%" cy="70%" r="60%">
-                <stop offset="0%" stopColor="oklch(0.75 0.18 150)" stopOpacity="0.5" />
-                <stop offset="60%" stopColor="oklch(0.65 0.12 155)" stopOpacity="0.2" />
-                <stop offset="100%" stopColor="oklch(0.55 0.1 160)" stopOpacity="0" />
-              </radialGradient>
-              <linearGradient id="greenGradient3" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="oklch(0.8 0.15 145)" stopOpacity="0.4" />
-                <stop offset="100%" stopColor="oklch(0.5 0.12 170)" stopOpacity="0.1" />
-              </linearGradient>
-            </defs>
-            <ellipse cx="400" cy="400" rx="350" ry="300" fill="url(#greenGradient1)" />
-            <ellipse cx="300" cy="500" rx="280" ry="250" fill="url(#greenGradient2)" />
-            <ellipse cx="550" cy="250" rx="200" ry="180" fill="url(#greenGradient3)" />
-            <path
-              d="M100 350 Q200 300 300 350 T500 350 T700 350"
-              stroke="oklch(0.6 0.15 160)"
-              strokeWidth="2"
-              strokeOpacity="0.2"
-              fill="none"
-            />
-            <path
-              d="M100 400 Q200 350 300 400 T500 400 T700 400"
-              stroke="oklch(0.65 0.12 155)"
-              strokeWidth="1.5"
-              strokeOpacity="0.15"
-              fill="none"
-            />
-            <path
-              d="M100 450 Q200 400 300 450 T500 450 T700 450"
-              stroke="oklch(0.55 0.1 165)"
-              strokeWidth="1"
-              strokeOpacity="0.1"
-              fill="none"
-            />
-          </svg>
+      <section className="mx-auto grid max-w-7xl gap-14 px-6 py-16 lg:grid-cols-[minmax(0,1fr)_480px] lg:items-center lg:py-24">
+        <div>
+          <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/70 px-4 py-2 text-sm text-muted-foreground shadow-sm backdrop-blur">
+            <Sparkles className="size-4 text-primary" />
+            Redesigned inbox, smarter onboarding, better focus
+          </div>
+
+          <h1 className="mt-6 max-w-3xl text-balance text-5xl font-semibold tracking-tight text-foreground md:text-6xl xl:text-7xl">
+            Messaging that feels calm, clear, and ready for real work.
+          </h1>
+          <p className="mt-6 max-w-2xl text-lg leading-8 text-muted-foreground">
+            Messenger now guides people from sign-up to conversation with a cleaner visual hierarchy,
+            safer account flow, and a chat workspace built for quick scanning.
+          </p>
+
+          <div className="mt-8 flex flex-col gap-4 sm:flex-row">
+            <Button asChild size="lg" className="h-12 rounded-xl px-7 shadow-lg shadow-primary/20">
+              <Link href="/signup">
+                Start messaging
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+            <Button
+              asChild
+              size="lg"
+              variant="outline"
+              className="h-12 rounded-xl border-border/70 bg-background/80 px-7"
+            >
+              <Link href="/signin">
+                Explore the sign-in flow
+                <ArrowUpRight className="h-4 w-4" />
+              </Link>
+            </Button>
+          </div>
+
+          <div className="mt-10 flex flex-wrap gap-3">
+            {[
+              "Protected by gateway-auth session checks",
+              "Responsive layout from landing page to chat",
+              "Dark mode ready with one tap",
+            ].map((item) => (
+              <div
+                key={item}
+                className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/80 px-4 py-2 text-sm text-muted-foreground shadow-sm"
+              >
+                <CheckCircle2 className="size-4 text-primary" />
+                {item}
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-12 grid gap-4 sm:grid-cols-3">
+            {[
+              { value: "3x", label: "clearer content hierarchy" },
+              { value: "1 tap", label: "theme switching" },
+              { value: "0 clutter", label: "focused inbox layout" },
+            ].map((stat) => (
+              <div key={stat.label} className="rounded-2xl border border-border/70 bg-card/75 p-5 shadow-sm">
+                <div className="text-2xl font-semibold text-foreground">{stat.value}</div>
+                <p className="mt-1 text-sm text-muted-foreground">{stat.label}</p>
+              </div>
+            ))}
+          </div>
         </div>
 
-        <h1 className="mx-auto max-w-3xl text-balance text-4xl font-semibold leading-tight text-foreground md:text-5xl lg:text-6xl">
-          Simple, fast, secure messaging
-        </h1>
-        <p className="mx-auto mt-6 max-w-xl text-lg text-muted-foreground text-pretty">
-          Connect with friends and family instantly. No ads, no gimmicks, just pure communication.
-        </p>
-        <div className="relative mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
-          <Button asChild size="lg" className="h-12 rounded-xl px-8 font-medium">
-            <Link href="/signup">
-              Start messaging
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </Button>
-          <Button
-            asChild
-            size="lg"
-            variant="outline"
-            className="h-12 rounded-xl border-border px-8 font-medium text-foreground hover:bg-muted"
-          >
-            <Link href="/chat">Open inbox</Link>
-          </Button>
+        <div className="relative">
+          <div className="absolute inset-0 -z-10 rounded-[32px] bg-primary/10 blur-3xl" />
+          <div className="overflow-hidden rounded-[32px] border border-border/70 bg-card/85 p-4 shadow-2xl shadow-primary/10 backdrop-blur">
+            <div className="rounded-[26px] border border-border/70 bg-background/90 p-4">
+              <div className="flex items-center justify-between rounded-2xl border border-border/60 bg-card/80 px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/15 text-primary">
+                    <MessageCircle className="size-5" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-foreground">Inbox overview</p>
+                    <p className="text-sm text-muted-foreground">Search, scan, and reply with less effort.</p>
+                  </div>
+                </div>
+                <div className="rounded-full bg-accent px-3 py-1 text-xs font-medium text-accent-foreground">
+                  Live
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
+                <div className="space-y-3 rounded-3xl border border-border/60 bg-muted/40 p-3">
+                  {[
+                    { name: "Sarah Wilson", message: "The redesign looks great.", active: true, unread: 2 },
+                    { name: "Team Project", message: "Feedback is ready for review.", active: false, unread: 5 },
+                    { name: "Alex Chen", message: "Can we sync at 2pm?", active: false, unread: 0 },
+                  ].map((chat) => (
+                    <div
+                      key={chat.name}
+                      className={`rounded-2xl border px-3 py-3 ${
+                        chat.active
+                          ? "border-primary/30 bg-background shadow-sm"
+                          : "border-transparent bg-background/60"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium text-foreground">{chat.name}</p>
+                          <p className="mt-1 text-xs text-muted-foreground">{chat.message}</p>
+                        </div>
+                        {chat.unread > 0 ? (
+                          <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">
+                            {chat.unread}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="rounded-3xl border border-border/60 bg-muted/35 p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-foreground">Sarah Wilson</p>
+                      <p className="text-sm text-muted-foreground">Online now</p>
+                    </div>
+                    <div className="rounded-full border border-border/70 bg-background/80 px-3 py-1 text-xs text-muted-foreground">
+                      Reply in seconds
+                    </div>
+                  </div>
+
+                  <div className="mt-5 space-y-3">
+                    <div className="max-w-[80%] rounded-3xl rounded-bl-md border border-border/70 bg-background px-4 py-3 text-sm text-foreground shadow-sm">
+                      The updated inbox is much easier to skim. I can find people immediately.
+                    </div>
+                    <div className="ml-auto max-w-[80%] rounded-3xl rounded-br-md bg-message-sent px-4 py-3 text-sm text-foreground shadow-sm">
+                      Great. The new composer and status panels also reduce the noise.
+                    </div>
+                    <div className="max-w-[80%] rounded-3xl rounded-bl-md border border-border/70 bg-background px-4 py-3 text-sm text-foreground shadow-sm">
+                      Perfect. Let&apos;s ship it.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-6 py-20">
-        <div className="grid gap-8 md:grid-cols-3">
-          <div className="rounded-2xl border border-border bg-card p-6">
-            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-accent">
-              <Zap className="h-6 w-6 text-accent-foreground" />
+      <section id="features" className="mx-auto max-w-7xl px-6 py-8 md:py-12">
+        <div className="mb-8 max-w-2xl">
+          <p className="text-sm font-medium uppercase tracking-[0.2em] text-primary">Why it feels better</p>
+          <h2 className="mt-3 text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
+            UI polish that improves speed, confidence, and readability.
+          </h2>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="rounded-[28px] border border-border/70 bg-card/80 p-7 shadow-sm">
+            <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-accent text-accent-foreground">
+              <Zap className="h-6 w-6" />
             </div>
-            <h3 className="text-lg font-medium text-foreground">Lightning fast</h3>
-            <p className="mt-2 leading-relaxed text-muted-foreground">
-              Messages delivered instantly. No delays, no waiting. Your conversations flow naturally.
+            <h3 className="text-xl font-semibold text-foreground">Faster visual scanning</h3>
+            <p className="mt-3 leading-7 text-muted-foreground">
+              The refreshed spacing, cards, and conversation hierarchy make it easier to spot unread
+              items, active chats, and key actions without hunting.
             </p>
           </div>
-          <div className="rounded-2xl border border-border bg-card p-6">
-            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-accent">
-              <Shield className="h-6 w-6 text-accent-foreground" />
+
+          <div className="rounded-[28px] border border-border/70 bg-card/80 p-7 shadow-sm">
+            <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-accent text-accent-foreground">
+              <Shield className="h-6 w-6" />
             </div>
-            <h3 className="text-lg font-medium text-foreground">Gateway protected</h3>
-            <p className="mt-2 leading-relaxed text-muted-foreground">
-              The chat experience stays behind an authenticated layout backed by the gateway and identity services.
+            <h3 className="text-xl font-semibold text-foreground">Clearer onboarding</h3>
+            <p className="mt-3 leading-7 text-muted-foreground">
+              Sign-in and sign-up now feel more trustworthy with stronger framing, clearer labels, and
+              better feedback during account actions.
             </p>
           </div>
-          <div className="rounded-2xl border border-border bg-card p-6">
-            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-accent">
-              <Globe className="h-6 w-6 text-accent-foreground" />
+
+          <div className="rounded-[28px] border border-border/70 bg-card/80 p-7 shadow-sm">
+            <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-accent text-accent-foreground">
+              <Globe className="h-6 w-6" />
             </div>
-            <h3 className="text-lg font-medium text-foreground">Works everywhere</h3>
-            <p className="mt-2 leading-relaxed text-muted-foreground">
-              Use Messenger on any device. Your chats sync seamlessly across all platforms.
+            <h3 className="text-xl font-semibold text-foreground">Consistent everywhere</h3>
+            <p className="mt-3 leading-7 text-muted-foreground">
+              The new theme support and shared visual system carry across public marketing, auth, and
+              the protected chat workspace.
             </p>
           </div>
         </div>
       </section>
 
-      <footer className="border-t border-border px-6 py-8">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 md:flex-row">
-          <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary">
+      <section id="experience" className="mx-auto max-w-7xl px-6 py-16">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+          <div className="rounded-[32px] border border-border/70 bg-card/75 p-8 shadow-sm">
+            <p className="text-sm font-medium uppercase tracking-[0.2em] text-primary">Experience flow</p>
+            <h2 className="mt-3 text-3xl font-semibold tracking-tight text-foreground">
+              From landing page to first reply, each screen does more with less.
+            </h2>
+            <div className="mt-8 space-y-6">
+              {[
+                {
+                  icon: ShieldCheck,
+                  title: "Safer first impression",
+                  description: "Visitors immediately see secure auth, clear next steps, and a trustworthy product frame.",
+                },
+                {
+                  icon: Sparkles,
+                  title: "Smoother account flow",
+                  description: "Forms now add clearer grouping, password visibility, and better success feedback.",
+                },
+                {
+                  icon: MessageCircle,
+                  title: "Focused conversation workspace",
+                  description: "Users can search faster, scan status more easily, and compose messages in a calmer layout.",
+                },
+              ].map(({ icon: Icon, title, description }) => (
+                <div key={title} className="flex gap-4 rounded-2xl border border-border/60 bg-background/70 p-4">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/12 text-primary">
+                    <Icon className="size-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-foreground">{title}</h3>
+                    <p className="mt-1 text-sm leading-6 text-muted-foreground">{description}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-[32px] border border-border/70 bg-gradient-to-br from-card to-muted/60 p-8 shadow-sm">
+            <p className="text-sm font-medium uppercase tracking-[0.2em] text-primary">What changed</p>
+            <div className="mt-6 space-y-5 text-sm leading-7 text-muted-foreground">
+              <p>
+                The redesign raises contrast where decisions matter, softens secondary chrome, and gives each
+                screen a stronger sense of structure.
+              </p>
+              <p>
+                Instead of treating the client as separate pages, the update uses one shared visual language so
+                the product feels intentional from the first visit through the protected inbox.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="cta" className="px-6 pb-20 pt-4">
+        <div className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-6 rounded-[32px] border border-border/70 bg-card/80 p-8 shadow-sm md:flex-row md:items-center">
+          <div className="max-w-2xl">
+            <p className="text-sm font-medium uppercase tracking-[0.2em] text-primary">Ready to try it</p>
+            <h2 className="mt-3 text-3xl font-semibold tracking-tight text-foreground">
+              Open the refreshed experience and start a conversation.
+            </h2>
+            <p className="mt-3 text-muted-foreground">
+              Create an account or sign in to see the updated inbox, composer, and message layout.
+            </p>
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Button asChild size="lg" className="rounded-xl px-6">
+              <Link href="/signup">Create account</Link>
+            </Button>
+            <Button asChild size="lg" variant="outline" className="rounded-xl px-6">
+              <Link href="/signin">Sign in</Link>
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      <footer className="border-t border-border/60 px-6 py-8">
+        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 md:flex-row">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary">
               <MessageCircle className="h-4 w-4 text-primary-foreground" />
             </div>
-            <span className="font-medium text-foreground">Messenger</span>
+            <div>
+              <p className="font-medium text-foreground">Messenger</p>
+              <p className="text-sm text-muted-foreground">Calmer messaging for modern teams.</p>
+            </div>
           </div>
-          <p className="text-sm text-muted-foreground">Simple messaging for everyone.</p>
+          <p className="text-sm text-muted-foreground">Built for a cleaner UI and a faster first reply.</p>
         </div>
       </footer>
     </main>

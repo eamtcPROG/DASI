@@ -5,7 +5,7 @@ export default function SignInPage() {
   return (
     <AuthShell
       title="Welcome back"
-      description="Sign in with your identity service account."
+      description="Sign in to pick up conversations instantly with the refreshed, protected workspace."
       footerText={"Don't have an account?"}
       footerHref="/signup"
       footerLabel="Sign up"
