@@ -5,7 +5,7 @@ export default function SignUpPage() {
   return (
     <AuthShell
       title="Create account"
-      description="Start messaging with the gateway-backed sign-up flow."
+      description="Create your account to enter the updated inbox with clearer navigation and calmer focus."
       footerText="Already have an account?"
       footerHref="/signin"
       footerLabel="Sign in"
