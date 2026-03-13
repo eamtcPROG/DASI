@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { MessageCircleMore, SearchX } from "lucide-react"
 
 import { SidebarHeader } from "@/components/chat/sidebar-header"
@@ -15,110 +15,164 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty"
-import { type UserDto } from "@/lib/auth"
+import { type UserDto, getUserDisplayName } from "@/lib/auth"
+import { getSocket, disconnectSocket } from "@/lib/socket"
 import { cn } from "@/lib/utils"
 
-const DEMO_CHATS = [
-  {
-    id: "1",
-    name: "Sarah Wilson",
-    lastMessage: "That sounds great! Let's share the final draft this afternoon.",
-    time: "12:45",
-    unread: 2,
-    status: "Online",
-    role: "Product design",
-    pinned: true,
-  },
-  {
-    id: "2",
-    name: "Alex Chen",
-    lastMessage: "See you tomorrow after stand-up.",
-    time: "11:30",
-    unread: 0,
-    status: "In focus mode",
-    role: "Engineering",
-    pinned: false,
-  },
-  {
-    id: "3",
-    name: "Team Project",
-    lastMessage: "Meeting at 3pm. Bring the updated dashboard screenshots.",
-    time: "10:15",
-    unread: 5,
-    status: "5 people active",
-    role: "Shared channel",
-    pinned: true,
-  },
-  {
-    id: "4",
-    name: "John Smith",
-    lastMessage: "Thanks for your help with the rollout plan.",
-    time: "Yesterday",
-    unread: 0,
-    status: "Away",
-    role: "Operations",
-    pinned: false,
-  },
-  {
-    id: "5",
-    name: "Emma Davis",
-    lastMessage: "Sure, I'll send it over with annotated comments.",
-    time: "Yesterday",
-    unread: 0,
-    status: "Offline",
-    role: "Marketing",
-    pinned: false,
-  },
-]
+type Message = {
+  id: string
+  content: string
+  time: string
+  sent: boolean
+  read: boolean
+}
 
-const DEMO_MESSAGES: Record<
-  string,
-  { id: string; content: string; time: string; sent: boolean; read: boolean }[]
-> = {
-  "1": [
-    { id: "1", content: "Hey! How are you?", time: "12:30", sent: false, read: true },
-    { id: "2", content: "I'm good, thanks! Just finished my project.", time: "12:32", sent: true, read: true },
-    { id: "3", content: "That's awesome! Want to grab coffee later?", time: "12:40", sent: false, read: true },
-    { id: "4", content: "That sounds great!", time: "12:45", sent: false, read: true },
-  ],
-  "2": [
-    { id: "1", content: "Are we still on for tomorrow?", time: "11:20", sent: true, read: true },
-    { id: "2", content: "Yes! Looking forward to it", time: "11:25", sent: false, read: true },
-    { id: "3", content: "See you tomorrow", time: "11:30", sent: false, read: true },
-  ],
-  "3": [
-    { id: "1", content: "Don't forget the meeting today", time: "10:00", sent: false, read: true },
-    { id: "2", content: "Got it, I'll be there", time: "10:05", sent: true, read: true },
-    { id: "3", content: "Meeting at 3pm", time: "10:15", sent: false, read: true },
-  ],
-  "4": [
-    { id: "1", content: "Could you help me with the report?", time: "Yesterday", sent: false, read: true },
-    { id: "2", content: "Of course! Let me take a look", time: "Yesterday", sent: true, read: true },
-    { id: "3", content: "Thanks for your help", time: "Yesterday", sent: false, read: true },
-  ],
-  "5": [
-    { id: "1", content: "Do you have the files?", time: "Yesterday", sent: true, read: true },
-    { id: "2", content: "Sure, I'll send it over", time: "Yesterday", sent: false, read: true },
-  ],
+type Chat = {
+  id: string
+  name: string
+  lastMessage: string
+  time: string
+  unread: number
+  status: string
+  role: string
+  pinned: boolean
+}
+
+type IncomingMessage = {
+  id: string
+  senderId: number
+  senderEmail: string
+  content: string
+  timestamp: string
 }
 
 type ChatPageProps = {
   user: UserDto
+  token: string
 }
 
-export function ChatPage({ user }: ChatPageProps) {
-  const [selectedChat, setSelectedChat] = useState<string | null>("1")
-  const [chats, setChats] = useState(DEMO_CHATS)
-  const [messages, setMessages] = useState(DEMO_MESSAGES)
+export function ChatPage({ user, token }: ChatPageProps) {
+  const [selectedChat, setSelectedChat] = useState<string | null>(null)
+  const [chats, setChats] = useState<Chat[]>([])
+  const [messages, setMessages] = useState<Record<string, Message[]>>({})
   const [search, setSearch] = useState("")
+  const [typingUsers, setTypingUsers] = useState<Set<number>>(new Set())
+  const typingTimeouts = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map())
+
+  useEffect(() => {
+    fetch("/api/auth/users?onPage=50")
+      .then((res) => res.json())
+      .then((data) => {
+        const users: UserDto[] = data?.objects ?? []
+        const filtered = users.filter((u) => u.id !== user.id)
+        setChats(
+          filtered.map((u) => ({
+            id: String(u.id),
+            name: getUserDisplayName(u),
+            lastMessage: "",
+            time: "",
+            unread: 0,
+            status: "Offline",
+            role: u.email,
+            pinned: false,
+          })),
+        )
+      })
+      .catch(() => {})
+  }, [user.id])
+
+  useEffect(() => {
+    const socket = getSocket(token)
+
+    socket.on("message:receive", (msg: IncomingMessage) => {
+      const chatId = String(msg.senderId)
+      const newMessage: Message = {
+        id: msg.id,
+        content: msg.content,
+        time: new Date(msg.timestamp).toLocaleTimeString("en-US", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        }),
+        sent: false,
+        read: false,
+      }
+
+      setMessages((prev) => ({
+        ...prev,
+        [chatId]: [...(prev[chatId] ?? []), newMessage],
+      }))
+
+      setChats((prev) =>
+        prev.map((chat) =>
+          chat.id === chatId
+            ? { ...chat, lastMessage: msg.content, time: "Now", unread: chat.unread + 1 }
+            : chat,
+        ),
+      )
+    })
+
+    socket.on("message:sent", (msg: IncomingMessage) => {
+      const chatId = String(
+        selectedChatRef.current ?? 0,
+      )
+      setMessages((prev) => {
+        const existing = prev[chatId] ?? []
+        return {
+          ...prev,
+          [chatId]: existing.map((m) =>
+            m.id === `pending-${msg.id}` ? { ...m, id: msg.id, read: false } : m,
+          ),
+        }
+      })
+    })
+
+    socket.on("message:typing", ({ senderId, isTyping }: { senderId: number; isTyping: boolean }) => {
+      setTypingUsers((prev) => {
+        const next = new Set(prev)
+        if (isTyping) {
+          next.add(senderId)
+          const existing = typingTimeouts.current.get(senderId)
+          if (existing) clearTimeout(existing)
+          typingTimeouts.current.set(
+            senderId,
+            setTimeout(() => {
+              setTypingUsers((s) => {
+                const n = new Set(s)
+                n.delete(senderId)
+                return n
+              })
+            }, 3000),
+          )
+        } else {
+          next.delete(senderId)
+        }
+        return next
+      })
+
+      setChats((prev) =>
+        prev.map((chat) =>
+          chat.id === String(senderId)
+            ? { ...chat, status: isTyping ? "Typing..." : "Online" }
+            : chat,
+        ),
+      )
+    })
+
+    return () => {
+      socket.off("message:receive")
+      socket.off("message:sent")
+      socket.off("message:typing")
+      disconnectSocket()
+    }
+  }, [token])
+
+  const selectedChatRef = useRef<string | null>(null)
+  selectedChatRef.current = selectedChat
 
   const filteredChats = useMemo(() => {
     const query = search.trim().toLowerCase()
-
-    if (!query) {
-      return chats
-    }
-
+    if (!query) return chats
     return chats.filter(
       (chat) =>
         chat.name.toLowerCase().includes(query) || chat.lastMessage.toLowerCase().includes(query),
@@ -131,12 +185,14 @@ export function ChatPage({ user }: ChatPageProps) {
   const hasSearchResults = filteredChats.length > 0
 
   const handleSendMessage = (content: string) => {
-    if (!selectedChat) {
-      return
-    }
+    if (!selectedChat) return
 
-    const newMessage = {
-      id: Date.now().toString(),
+    const socket = getSocket(token)
+    const recipientId = Number(selectedChat)
+
+    const pendingId = `pending-${Date.now()}`
+    const optimisticMessage: Message = {
+      id: pendingId,
       content,
       time: new Date().toLocaleTimeString("en-US", {
         hour: "2-digit",
@@ -147,24 +203,29 @@ export function ChatPage({ user }: ChatPageProps) {
       read: false,
     }
 
-    setMessages((previousMessages) => ({
-      ...previousMessages,
-      [selectedChat]: [...(previousMessages[selectedChat] || []), newMessage],
+    setMessages((prev) => ({
+      ...prev,
+      [selectedChat]: [...(prev[selectedChat] ?? []), optimisticMessage],
     }))
 
-    setChats((previousChats) =>
-      previousChats.map((chat) =>
+    setChats((prev) =>
+      prev.map((chat) =>
         chat.id === selectedChat ? { ...chat, lastMessage: content, time: "Now" } : chat,
       ),
     )
+
+    socket.emit("message:send", { recipientId, content })
   }
 
   const handleSelectChat = (id: string) => {
     setSelectedChat(id)
-    setChats((previousChats) =>
-      previousChats.map((chat) => (chat.id === id ? { ...chat, unread: 0 } : chat)),
+    setChats((prev) =>
+      prev.map((chat) => (chat.id === id ? { ...chat, unread: 0 } : chat)),
     )
   }
+
+  const selectedChatTyping =
+    selectedChat !== null && typingUsers.has(Number(selectedChat))
 
   return (
     <div className="min-h-screen p-3 md:p-4">
@@ -240,14 +301,14 @@ export function ChatPage({ user }: ChatPageProps) {
             <>
               <ChatHeader
                 name={selectedChatData.name}
-                status={selectedChatData.status}
+                status={selectedChatTyping ? "Typing..." : selectedChatData.status}
                 role={selectedChatData.role}
                 unreadCount={selectedChatData.unread}
                 showBackButton
                 onBack={() => setSelectedChat(null)}
               />
               <div className="flex-1 overflow-y-auto">
-                <MessageList messages={messages[selectedChat] || []} />
+                <MessageList messages={messages[selectedChat] ?? []} />
               </div>
               <MessageInput onSend={handleSendMessage} />
             </>
@@ -260,7 +321,7 @@ export function ChatPage({ user }: ChatPageProps) {
                   </EmptyMedia>
                   <EmptyTitle>Select a conversation</EmptyTitle>
                   <EmptyDescription>
-                    Open a chat from the left to see the refreshed header, cleaner message layout, and updated composer.
+                    Open a chat from the left to start messaging.
                   </EmptyDescription>
                 </EmptyHeader>
               </Empty>

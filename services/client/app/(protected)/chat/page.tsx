@@ -1,8 +1,14 @@
+import { redirect } from "next/navigation"
+
 import { ChatPage } from "@/components/chat/chat-page"
-import { requireUser } from "@/lib/auth-server"
+import { getSessionFromCookie } from "@/lib/auth-server"
 
 export default async function ProtectedChatPage() {
-  const user = await requireUser()
+  const session = await getSessionFromCookie()
 
-  return <ChatPage user={user} />
+  if (!session) {
+    redirect("/signin")
+  }
+
+  return <ChatPage user={session.user} token={session.access_token} />
 }
