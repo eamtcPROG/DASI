@@ -39,14 +39,15 @@ export function SidebarHeader({ user }: SidebarHeaderProps) {
           <span className="font-semibold text-foreground">Messenger</span>
         </div>
         <Button
-          variant="ghost"
-          size="icon"
+          variant="outline"
+          size="sm"
           onClick={handleSignOut}
           disabled={isSigningOut}
-          className="text-muted-foreground hover:text-foreground"
+          className="gap-2 rounded-lg border-border/70 bg-background text-foreground hover:bg-muted"
           aria-label="Sign out"
         >
-          {isSigningOut ? <Spinner className="size-4" /> : <LogOut className="w-5 h-5" />}
+          {isSigningOut ? <Spinner className="size-4" /> : <LogOut className="size-4" />}
+          <span>{isSigningOut ? "Signing out" : "Sign out"}</span>
         </Button>
       </div>
       <div className="mb-3">
