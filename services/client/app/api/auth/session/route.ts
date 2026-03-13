@@ -6,19 +6,11 @@ import {
   type AuthDto,
   type ResultObjectDto,
 } from "@/lib/auth"
-import { getSessionCookieOptions, requestGateway } from "@/lib/auth-server"
-
-function createErrorResponse(message: string, status: number) {
-  return NextResponse.json(
-    {
-      error: true,
-      htmlcode: status,
-      object: null,
-      messages: [{ message, type: "error" }],
-    } satisfies ResultObjectDto<null>,
-    { status },
-  )
-}
+import {
+  createErrorResponse,
+  getSessionCookieOptions,
+  requestGateway,
+} from "@/lib/auth-server"
 
 export async function GET() {
   const cookieStore = await cookies()

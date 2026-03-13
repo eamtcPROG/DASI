@@ -2,6 +2,7 @@ import "server-only"
 
 import { cache } from "react"
 import { cookies } from "next/headers"
+import { NextResponse } from "next/server"
 import { redirect } from "next/navigation"
 
 import {
@@ -42,6 +43,18 @@ async function parseJson<T>(response: Response) {
   } catch {
     return null
   }
+}
+
+export function createErrorResponse(message: string, status: number) {
+  return NextResponse.json(
+    {
+      error: true,
+      htmlcode: status,
+      object: null,
+      messages: [{ message, type: "error" }],
+    } satisfies ResultObjectDto<null>,
+    { status },
+  )
 }
 
 export async function requestGateway<T>(
