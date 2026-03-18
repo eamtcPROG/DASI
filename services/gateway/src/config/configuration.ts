@@ -2,6 +2,9 @@ export default () => ({
   NODE_ENV: process.env.NODE_ENV,
   port: process.env.PORT ? parseInt(process.env.PORT, 10) : 0,
   version: process.env.VERSION,
+  services: {
+    identityBaseUrl: process.env.IDENTITY_HTTP_URL ?? 'http://localhost:3001',
+  },
   rabbitmq: {
     url: process.env.RABBITMQ_URI,
     identityQueue: process.env.RMQ_IDENTITY_QUEUE ?? 'user',

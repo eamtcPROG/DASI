@@ -1,8 +1,7 @@
-import { Controller, Inject } from '@nestjs/common';
-import { EventPattern, Payload, Ctx } from '@nestjs/microservices';
+import { Controller } from '@nestjs/common';
+import { MessagePattern, Payload, Ctx } from '@nestjs/microservices';
 import { ChatService } from '../services/chat.service';
 import { ResultObjectDto } from '../dto/resultobject.dto';
-import { Channel } from 'amqplib';
 import { ChatGateway } from '../websocket/chat.gateway';
 
 @Controller()
@@ -12,9 +11,13 @@ export class ChatEventController {
     private readonly chatGateway: ChatGateway,
   ) {}
 
-  @EventPattern("get_chat")
+  @MessagePattern('get_chat')
   async handleGetChat(
-    @Payload() data: { type: "messages" | "users" | "general" | "rooms" | "leave" | "members", payload?: any },
+    @Payload()
+    data: {
+      type: 'messages' | 'users' | 'general' | 'rooms' | 'leave' | 'members';
+      payload?: any;
+    },
     @Ctx() context: any,
   ): Promise<ResultObjectDto<unknown>> {
     const channel = context.getChannelRef();
@@ -23,7 +26,7 @@ export class ChatEventController {
     let chat: unknown;
 
     switch (data.type) {
-      case "messages":
+      case 'messages':
         // Get room history for the specified room ID
         const roomId = data.payload?.roomId;
         if (roomId) {
@@ -32,19 +35,19 @@ export class ChatEventController {
           chat = [];
         }
         break;
-      case "users":
+      case 'users':
         chat = await this.chatService.getUserChat();
         break;
-      case "general":
+      case 'general':
         chat = await this.chatService.getGeneralChat();
         break;
-      case "rooms":
+      case 'rooms':
         chat = await this.chatService.getUserRooms(data.payload?.userId);
         break;
-      case "members":
+      case 'members':
         chat = await this.chatService.getRoomMembers(data.payload?.roomId);
         break;
-      case "leave":
+      case 'leave':
         try {
           await this.chatService.leaveRoom(data.payload?.userId, data.payload?.roomId);
           chat = null;
@@ -56,7 +59,7 @@ export class ChatEventController {
         break;
       default:
         return new ResultObjectDto(null, true, 400, [
-          { type: 2, message: "Invalid chat type" },
+          { type: 2, message: 'Invalid chat type' },
         ]);
     }
 
@@ -64,7 +67,7 @@ export class ChatEventController {
     return new ResultObjectDto(chat, false, 200);
   }
 
-  @EventPattern("chat_event")
+  @MessagePattern('chat_event')
   async handleChatEvent(
     @Payload() data: { event: string; payload: any },
     @Ctx() context: any,
@@ -76,11 +79,11 @@ export class ChatEventController {
 
     try {
       switch (data.event) {
-        case "join_room":
+        case 'join_room':
           // Handle join room - this is handled by ChatGateway
           result = { success: true };
           break;
-        case "send_message":
+        case 'send_message':
           // Handle send message - save to database and broadcast
           const message = await this.chatService.saveMessage({
             roomId: data.payload.roomId,
@@ -93,25 +96,28 @@ export class ChatEventController {
           
           result = { success: true, message };
           break;
-        case "leave_room":
-          // Handle leave room - this is handled by ChatGateway
+        case 'leave_room':
+          await this.chatService.leaveRoom(
+            data.payload.userId,
+            data.payload.roomId,
+          );
           result = { success: true };
           break;
-        case "create_room":
+        case 'create_room':
           // Handle create room - actually create the room!
           const room = await this.chatService.createRoom(data.payload);
           result = room;
           break;
         default:
           return new ResultObjectDto(null, true, 400, [
-            { type: 2, message: "Invalid chat event" },
+            { type: 2, message: 'Invalid chat event' },
           ]);
       }
 
       channel.ack(originalMsg);
       return new ResultObjectDto(result, false, 200);
     } catch (error) {
-      console.error("ChatEventController error:", error)
+      console.error('ChatEventController error:', error);
       channel.ack(originalMsg);
       return new ResultObjectDto(null, true, 500, [
         { type: 2, message: error.message },

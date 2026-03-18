@@ -36,9 +36,6 @@ export class CreateRoomRequestDto {
   @ApiProperty({ example: 'General chat room for team discussions', description: 'Room description', required: false })
   description: string | null;
 
-  @ApiProperty({ example: 123, description: 'ID of user creating the room' })
-  creatorId: number;
-
   @ApiProperty({ example: ['user1@example.com', 'user2@example.com'], description: 'List of member emails to add' })
   memberEmails: string[];
 }

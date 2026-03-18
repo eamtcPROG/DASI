@@ -38,8 +38,14 @@ export class ChatController {
     type: ResultObjectDto<CreateRoomResponseDto>,
     description: 'Create room response',
   })
-  async createRoom(@Body() body: CreateRoomRequestDto) {
-    return this.chatProxyService.sendChatEvent('create_room', body);
+  async createRoom(
+    @Body() body: CreateRoomRequestDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.chatProxyService.sendChatEvent('create_room', {
+      ...body,
+      creatorId: user.id,
+    });
   }
 
   @Get('rooms')

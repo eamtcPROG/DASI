@@ -7,6 +7,7 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
 } from "@nestjs/websockets";
+import { ConfigService } from "@nestjs/config";
 import { DefaultEventsMap, Server, Socket } from "socket.io";
 import { RealtimeService } from "./realtime.service";
 import { AuthProxyService } from "../services/auth-proxy.service";
@@ -33,11 +34,18 @@ export class RealtimeGateway
   @WebSocketServer()
   server: Server;
 
+  private readonly identityServiceUrl: string;
+
   constructor(
     private readonly realtimeService: RealtimeService,
     private readonly authProxyService: AuthProxyService,
     private readonly chatProxyService: ChatProxyService,
-  ) {}
+    private readonly configService: ConfigService,
+  ) {
+    this.identityServiceUrl =
+      this.configService.get<string>("services.identityBaseUrl") ??
+      "http://localhost:3001";
+  }
 
   async handleConnection(client: TypedSocket) {
     const token = client.handshake.auth?.token as string | undefined;
@@ -68,6 +76,68 @@ export class RealtimeGateway
     if (userId !== undefined) {
       this.realtimeService.removeConnection(userId, client.id);
     }
+  }
+
+  private getAuthHeaders(token?: string): HeadersInit | undefined {
+    if (!token) {
+      return undefined;
+    }
+
+    return {
+      Authorization: `Bearer ${token}`,
+    };
+  }
+
+  private async fetchIdentityUser(
+    userId: number,
+    token?: string,
+  ): Promise<UserDto | null> {
+    const identityResponse = await fetch(
+      `${this.identityServiceUrl}/user/${userId}`,
+      {
+        headers: this.getAuthHeaders(token),
+      },
+    );
+
+    if (!identityResponse.ok) {
+      return null;
+    }
+
+    const userData = (await identityResponse.json()) as { object?: UserDto };
+    return userData.object ?? null;
+  }
+
+  private async lookupUserIdsByEmail(
+    emails: string[],
+    token?: string,
+  ): Promise<number[]> {
+    const identityResponse = await fetch(
+      `${this.identityServiceUrl}/user/lookup-emails`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(this.getAuthHeaders(token) ?? {}),
+        },
+        body: JSON.stringify({ emails }),
+      },
+    );
+
+    if (!identityResponse.ok) {
+      throw new Error("Failed to resolve room members");
+    }
+
+    const identityResult = (await identityResponse.json()) as {
+      object?: Record<string, number>;
+    };
+
+    return Object.values(identityResult.object ?? {}).filter(
+      (userId): userId is number => typeof userId === "number",
+    );
+  }
+
+  private getFallbackUser(userId: number): UserDto {
+    return new UserDto(userId, `user${userId}@example.com`, null, null);
   }
 
   @SubscribeMessage("message:send")
@@ -132,14 +202,12 @@ export class RealtimeGateway
         const userMap = new Map<number, any>();
         for (const userId of userIds) {
           try {
-            const identityResponse = await fetch(`http://identity-service:3001/user/${userId}`, {
-              headers: {
-                'Authorization': `Bearer ${client.handshake.auth?.token}`,
-              },
-            });
-            if (identityResponse.ok) {
-              const userData = await identityResponse.json();
-              userMap.set(userId, userData.object);
+            const user = await this.fetchIdentityUser(
+              userId,
+              client.handshake.auth?.token,
+            );
+            if (user) {
+              userMap.set(userId, user);
             }
           } catch (error) {
             console.error(`Failed to fetch user ${userId}:`, error);
@@ -149,12 +217,7 @@ export class RealtimeGateway
         // Attach user information to messages
         const enrichedMessages = messages.map((msg: any) => ({
           ...msg,
-          user: userMap.get(msg.user_id) || {
-            id: msg.user_id,
-            email: `user${msg.user_id}@example.com`,
-            firstName: null,
-            lastName: null,
-          }
+          user: userMap.get(msg.user_id) || this.getFallbackUser(msg.user_id),
         }));
 
         client.emit('chat:history', {
@@ -191,21 +254,19 @@ export class RealtimeGateway
           // Fetch user info for the message sender
           let enrichedMessage = messageData.message;
           try {
-            const identityResponse = await fetch(`http://identity-service:3001/user/${messageData.message.user_id}`, {
-              headers: {
-                'Authorization': `Bearer ${client.handshake.auth?.token}`,
-              },
-            });
-            if (identityResponse.ok) {
-              const userData = await identityResponse.json();
+            const user = await this.fetchIdentityUser(
+              messageData.message.user_id,
+              client.handshake.auth?.token,
+            );
+            if (user) {
               enrichedMessage = {
                 ...messageData.message,
-                user: userData.object || {
-                  id: messageData.message.user_id,
-                  email: `user${messageData.message.user_id}@example.com`,
-                  firstName: null,
-                  lastName: null,
-                }
+                user,
+              };
+            } else {
+              enrichedMessage = {
+                ...messageData.message,
+                user: this.getFallbackUser(messageData.message.user_id),
               };
             }
           } catch (error) {
@@ -232,17 +293,38 @@ export class RealtimeGateway
     const sender = client.data.user;
     if (!sender || !payload?.roomId) return;
 
-    // Forward to Chat service via RabbitMQ
-    return this.chatProxyService.sendChatEvent('leave_room', {
-      roomId: payload.roomId,
-      userId: sender.id,
-    });
+    try {
+      const response = await this.chatProxyService.sendChatEvent("leave_room", {
+        roomId: payload.roomId,
+        userId: sender.id,
+      });
+
+      if (response?.error) {
+        client.emit("chat:error", {
+          message: response.messages?.[0]?.message ?? "Failed to leave room",
+        });
+        return response;
+      }
+
+      await client.leave(`room:${payload.roomId}`);
+      client.emit("chat:left_room", { roomId: payload.roomId });
+      return response;
+    } catch (error) {
+      console.error("Error in chat:leave_room:", error);
+      client.emit("chat:error", { message: "Failed to leave room" });
+    }
   }
 
   @SubscribeMessage("chat:create_room")
   async handleChatCreateRoom(
     @ConnectedSocket() client: TypedSocket,
-    @MessageBody() payload: { name: string; description: string | null; creatorId: number; memberEmails: string[] },
+    @MessageBody()
+    payload: {
+      name: string;
+      description: string | null;
+      creatorId?: number;
+      memberEmails: string[];
+    },
   ) {
     const sender = client.data.user;
     if (!sender || !payload?.name) {
@@ -250,37 +332,29 @@ export class RealtimeGateway
     }
 
     try {
-      // Call Identity service to get user IDs from emails
-      const identityResponse = await fetch('http://identity-service:3001/user/lookup-emails', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${client.handshake.auth?.token}`,
-        },
-        body: JSON.stringify({ emails: payload.memberEmails }),
-      });
-
-      const identityResult = await identityResponse.json();
+      const memberEmails = payload.memberEmails ?? [];
+      const memberUserIds = (
+        await this.lookupUserIdsByEmail(memberEmails, client.handshake.auth?.token)
+      ).filter((userId) => userId !== sender.id);
 
       // Forward to chat service via RabbitMQ to create room
-      const response = await this.chatProxyService.sendChatEvent('create_room', {
+      const response = await this.chatProxyService.sendChatEvent("create_room", {
         name: payload.name,
         description: payload.description,
-        creatorId: payload.creatorId,
-        memberEmails: payload.memberEmails,
-        memberUserIds: identityResult.object ? Object.values(identityResult.object) : []
+        creatorId: sender.id,
+        memberEmails,
+        memberUserIds,
       });
 
       // Send room_created event back to creator
       if (response && response.object) {
         client.emit("chat:room_created", { 
           room: response.object, 
-          creatorId: payload.creatorId, 
-          memberEmails: payload.memberEmails 
+          creatorId: sender.id,
+          memberEmails,
         });
         
         // Notify invited members that they've been added to a new room
-        const memberUserIds = identityResult.object ? Object.values(identityResult.object) : [];
         for (const userId of memberUserIds) {
           // Find all connected clients for this user and notify them
           const connectedSockets = Array.from(this.server.sockets.sockets.values())
@@ -289,8 +363,8 @@ export class RealtimeGateway
           for (const socket of connectedSockets) {
             socket.emit("chat:room_invitation", {
               room: response.object,
-              invitedBy: payload.creatorId,
-              memberEmails: payload.memberEmails
+              invitedBy: sender.id,
+              memberEmails,
             });
           }
         }
