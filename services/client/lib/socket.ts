@@ -1,6 +1,15 @@
 import { io, Socket } from "socket.io-client"
 
-const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:3000"
+function getDefaultGatewayUrl() {
+  if (typeof window === "undefined") {
+    return "http://localhost:3000"
+  }
+
+  return `${window.location.protocol}//${window.location.hostname}:3000`
+}
+
+const GATEWAY_URL =
+  (process.env.NEXT_PUBLIC_GATEWAY_URL ?? getDefaultGatewayUrl()).replace(/\/$/, "")
 
 let socket: Socket | null = null
 
