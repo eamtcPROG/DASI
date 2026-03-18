@@ -22,6 +22,19 @@ type TypedSocket = Socket<
   SocketData
 >;
 
+type ChatMessage = {
+  user_id: number;
+  [key: string]: unknown;
+};
+
+type ChatMessageWithUser = ChatMessage & {
+  user: UserDto;
+};
+
+type SendMessageResult = {
+  message?: ChatMessage;
+};
+
 @WebSocketGateway({
   cors: {
     origin: ["http://localhost:3100", "http://127.0.0.1:3100"],
@@ -76,6 +89,12 @@ export class RealtimeGateway
     if (userId !== undefined) {
       this.realtimeService.removeConnection(userId, client.id);
     }
+  }
+
+  private getSocketToken(client: TypedSocket): string | undefined {
+    const auth = client.handshake.auth as { token?: unknown } | undefined;
+    const token = auth?.token;
+    return typeof token === "string" ? token : undefined;
   }
 
   private getAuthHeaders(token?: string): HeadersInit | undefined {
@@ -185,27 +204,28 @@ export class RealtimeGateway
     if (!sender || !payload?.roomId) return;
 
     try {
+      const token = this.getSocketToken(client);
+
       // Join the room in the Gateway WebSocket
       await client.join(`room:${payload.roomId}`);
 
       // Forward to Chat service via RabbitMQ to get history
-      const response = await this.chatProxyService.getChat('messages', { roomId: payload.roomId });
+      const response = await this.chatProxyService.getChat("messages", {
+        roomId: payload.roomId,
+      });
 
       // Enrich messages with user information
       if (response && response.object && Array.isArray(response.object)) {
-        const messages = response.object;
-        
+        const messages = response.object as ChatMessage[];
+
         // Get unique user IDs from messages
-        const userIds = [...new Set(messages.map((msg: any) => msg.user_id))];
-        
+        const userIds = [...new Set(messages.map((msg) => msg.user_id))];
+
         // Fetch user information from Identity service
-        const userMap = new Map<number, any>();
+        const userMap = new Map<number, UserDto>();
         for (const userId of userIds) {
           try {
-            const user = await this.fetchIdentityUser(
-              userId,
-              client.handshake.auth?.token,
-            );
+            const user = await this.fetchIdentityUser(userId, token);
             if (user) {
               userMap.set(userId, user);
             }
@@ -215,12 +235,12 @@ export class RealtimeGateway
         }
 
         // Attach user information to messages
-        const enrichedMessages = messages.map((msg: any) => ({
+        const enrichedMessages: ChatMessageWithUser[] = messages.map((msg) => ({
           ...msg,
-          user: userMap.get(msg.user_id) || this.getFallbackUser(msg.user_id),
+          user: userMap.get(msg.user_id) ?? this.getFallbackUser(msg.user_id),
         }));
 
-        client.emit('chat:history', {
+        client.emit("chat:history", {
           roomId: payload.roomId,
           messages: enrichedMessages,
         });
@@ -240,43 +260,39 @@ export class RealtimeGateway
     if (!sender || !payload?.roomId || !payload?.content) return;
 
     try {
+      const token = this.getSocketToken(client);
+
       // Forward to Chat service via RabbitMQ to save message
-      const response = await this.chatProxyService.sendChatEvent('send_message', {
-        roomId: payload.roomId,
-        userId: sender.id,
-        content: payload.content,
-      });
+      const response = await this.chatProxyService.sendChatEvent(
+        "send_message",
+        {
+          roomId: payload.roomId,
+          userId: sender.id,
+          content: payload.content,
+        },
+      );
 
       // Broadcast message to all users in the room except the sender
       if (response && response.object) {
-        const messageData = response.object as { message?: any };
-        if (messageData.message) {
+        const messageData = response.object as SendMessageResult;
+        const savedMessage = messageData.message;
+        if (savedMessage) {
           // Fetch user info for the message sender
-          let enrichedMessage = messageData.message;
-          try {
-            const user = await this.fetchIdentityUser(
-              messageData.message.user_id,
-              client.handshake.auth?.token,
-            );
-            if (user) {
-              enrichedMessage = {
-                ...messageData.message,
-                user,
-              };
-            } else {
-              enrichedMessage = {
-                ...messageData.message,
-                user: this.getFallbackUser(messageData.message.user_id),
-              };
-            }
-          } catch (error) {
-            console.error(`Failed to fetch user ${messageData.message.user_id}:`, error);
-          }
+          const user =
+            (await this.fetchIdentityUser(savedMessage.user_id, token)) ??
+            this.getFallbackUser(savedMessage.user_id);
+          const enrichedMessage: ChatMessageWithUser = {
+            ...savedMessage,
+            user,
+          };
 
-          this.server.to(`room:${payload.roomId}`).except(client.id).emit('chat:new_message', {
-            roomId: payload.roomId,
-            message: enrichedMessage,
-          });
+          this.server
+            .to(`room:${payload.roomId}`)
+            .except(client.id)
+            .emit("chat:new_message", {
+              roomId: payload.roomId,
+              message: enrichedMessage,
+            });
         }
       }
     } catch (error) {
@@ -332,41 +348,39 @@ export class RealtimeGateway
     }
 
     try {
+      const token = this.getSocketToken(client);
       const memberEmails = payload.memberEmails ?? [];
       const memberUserIds = (
-        await this.lookupUserIdsByEmail(memberEmails, client.handshake.auth?.token)
+        await this.lookupUserIdsByEmail(memberEmails, token)
       ).filter((userId) => userId !== sender.id);
 
       // Forward to chat service via RabbitMQ to create room
-      const response = await this.chatProxyService.sendChatEvent("create_room", {
-        name: payload.name,
-        description: payload.description,
-        creatorId: sender.id,
-        memberEmails,
-        memberUserIds,
-      });
+      const response = await this.chatProxyService.sendChatEvent(
+        "create_room",
+        {
+          name: payload.name,
+          description: payload.description,
+          creatorId: sender.id,
+          memberEmails,
+          memberUserIds,
+        },
+      );
 
       // Send room_created event back to creator
       if (response && response.object) {
-        client.emit("chat:room_created", { 
-          room: response.object, 
+        client.emit("chat:room_created", {
+          room: response.object,
           creatorId: sender.id,
           memberEmails,
         });
-        
+
         // Notify invited members that they've been added to a new room
         for (const userId of memberUserIds) {
-          // Find all connected clients for this user and notify them
-          const connectedSockets = Array.from(this.server.sockets.sockets.values())
-            .filter(socket => socket.data.user?.id === userId);
-            
-          for (const socket of connectedSockets) {
-            socket.emit("chat:room_invitation", {
-              room: response.object,
-              invitedBy: sender.id,
-              memberEmails,
-            });
-          }
+          this.server.to(`user:${userId}`).emit("chat:room_invitation", {
+            room: response.object,
+            invitedBy: sender.id,
+            memberEmails,
+          });
         }
       }
     } catch (error) {
