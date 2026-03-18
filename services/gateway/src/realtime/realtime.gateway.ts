@@ -14,6 +14,18 @@ import { AuthProxyService } from "../services/auth-proxy.service";
 import { ChatProxyService } from "../services/chat-proxy.service";
 import { UserDto } from "../dto/user.dto";
 
+const DEFAULT_SOCKET_CORS_ORIGINS = [
+  "http://localhost:3100",
+  "http://127.0.0.1:3100",
+];
+
+const SOCKET_CORS_ORIGINS = (
+  process.env.SOCKET_CORS_ORIGINS ?? DEFAULT_SOCKET_CORS_ORIGINS.join(",")
+)
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 type SocketData = { user?: UserDto };
 type TypedSocket = Socket<
   DefaultEventsMap,
@@ -37,7 +49,7 @@ type SendMessageResult = {
 
 @WebSocketGateway({
   cors: {
-    origin: ["http://localhost:3100", "http://127.0.0.1:3100"],
+    origin: SOCKET_CORS_ORIGINS,
     credentials: true,
   },
 })

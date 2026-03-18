@@ -12,10 +12,13 @@ services:
     build:
       context: ./client
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_GATEWAY_URL: ${NEXT_PUBLIC_GATEWAY_URL:-http://localhost:3000}
     environment:
       NODE_ENV: production
       PORT: 3000
       GATEWAY_URL: http://gateway:3000
+      NEXT_PUBLIC_GATEWAY_URL: ${NEXT_PUBLIC_GATEWAY_URL:-http://localhost:3000}
       NEXT_TELEMETRY_DISABLED: "1"
     ports:
       - ${CLIENT_PORT:-3100}:3000
@@ -48,6 +51,7 @@ services:
       - ${GATEWAY_PORT:-3000}:3000
     environment:
       NODE_ENV: production
+      SOCKET_CORS_ORIGINS: ${SOCKET_CORS_ORIGINS:-http://localhost:3100,http://127.0.0.1:3100}
     depends_on:
       identity:
         condition: service_healthy
@@ -189,7 +193,7 @@ services:
     env_file:
       - ./chat/env/.env.production
     ports:
-      - 3003:3003
+      - ${CHAT_PORT:-3003}:3003
     environment:
       NODE_ENV: production
     depends_on:
