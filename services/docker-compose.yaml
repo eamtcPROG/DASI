@@ -35,6 +35,7 @@ services:
       retries: 12
       start_period: 30s
 
+
   gateway:
     <<: *app-service
     container_name: gateway-service
@@ -69,6 +70,7 @@ services:
       retries: 12
       start_period: 25s
 
+
   identity:
     <<: *app-service
     container_name: identity-service
@@ -98,6 +100,7 @@ services:
       timeout: 5s
       retries: 12
       start_period: 25s
+
 
   
   postgres-identity:
@@ -152,6 +155,8 @@ services:
       retries: 12
       start_period: 25s
 
+
+
   postgres-analytics:
     image: postgres:16-alpine
     container_name: postgres-analytics
@@ -165,6 +170,48 @@ services:
       PGDATA: /var/lib/postgresql/data/pgdata 
     volumes:
       - postgres-analytics-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - dasi-net
+
+
+  chat:
+    <<: *app-service
+    container_name: chat-service
+    build:
+      context: ./chat
+      dockerfile: Dockerfile
+    env_file:
+      - ./chat/env/.env.production
+    ports:
+      - 3003:3003
+    environment:
+      NODE_ENV: production
+    depends_on:
+      postgres-chat:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - dasi-net
+
+  postgres-chat:
+    image: postgres:16-alpine
+    container_name: postgres-chat
+    ports:
+      - 5434:5432
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: chat
+      PGDATA: /var/lib/postgresql/data/pgdata 
+    volumes:
+      - postgres-chat-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
@@ -211,6 +258,7 @@ services:
 volumes:
   postgres-identity-data:
   postgres-analytics-data:
+  postgres-chat-data:
 networks:
   dasi-net:
     driver: bridge

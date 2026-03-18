@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { MessageCircleMore, SearchX } from "lucide-react"
 
 import { SidebarHeader } from "@/components/chat/sidebar-header"
@@ -8,6 +8,7 @@ import { ChatList } from "@/components/chat/chat-list"
 import { ChatHeader } from "@/components/chat/chat-header"
 import { MessageList } from "@/components/chat/message-list"
 import { MessageInput } from "@/components/chat/message-input"
+import { RoomMembersModal } from "@/components/chat/room-members-modal"
 import {
   Empty,
   EmptyDescription,
@@ -15,110 +16,269 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty"
-import { type UserDto } from "@/lib/auth"
+import { type UserDto, getUserDisplayName } from "@/lib/auth"
+import { getSocket, disconnectSocket, getSocketStatus } from "@/lib/socket"
 import { cn } from "@/lib/utils"
 
-const DEMO_CHATS = [
-  {
-    id: "1",
-    name: "Sarah Wilson",
-    lastMessage: "That sounds great! Let's share the final draft this afternoon.",
-    time: "12:45",
-    unread: 2,
-    status: "Online",
-    role: "Product design",
-    pinned: true,
-  },
-  {
-    id: "2",
-    name: "Alex Chen",
-    lastMessage: "See you tomorrow after stand-up.",
-    time: "11:30",
-    unread: 0,
-    status: "In focus mode",
-    role: "Engineering",
-    pinned: false,
-  },
-  {
-    id: "3",
-    name: "Team Project",
-    lastMessage: "Meeting at 3pm. Bring the updated dashboard screenshots.",
-    time: "10:15",
-    unread: 5,
-    status: "5 people active",
-    role: "Shared channel",
-    pinned: true,
-  },
-  {
-    id: "4",
-    name: "John Smith",
-    lastMessage: "Thanks for your help with the rollout plan.",
-    time: "Yesterday",
-    unread: 0,
-    status: "Away",
-    role: "Operations",
-    pinned: false,
-  },
-  {
-    id: "5",
-    name: "Emma Davis",
-    lastMessage: "Sure, I'll send it over with annotated comments.",
-    time: "Yesterday",
-    unread: 0,
-    status: "Offline",
-    role: "Marketing",
-    pinned: false,
-  },
-]
+type Message = {
+  id: string
+  content: string
+  time: string
+  sent: boolean
+  read: boolean
+}
 
-const DEMO_MESSAGES: Record<
-  string,
-  { id: string; content: string; time: string; sent: boolean; read: boolean }[]
-> = {
-  "1": [
-    { id: "1", content: "Hey! How are you?", time: "12:30", sent: false, read: true },
-    { id: "2", content: "I'm good, thanks! Just finished my project.", time: "12:32", sent: true, read: true },
-    { id: "3", content: "That's awesome! Want to grab coffee later?", time: "12:40", sent: false, read: true },
-    { id: "4", content: "That sounds great!", time: "12:45", sent: false, read: true },
-  ],
-  "2": [
-    { id: "1", content: "Are we still on for tomorrow?", time: "11:20", sent: true, read: true },
-    { id: "2", content: "Yes! Looking forward to it", time: "11:25", sent: false, read: true },
-    { id: "3", content: "See you tomorrow", time: "11:30", sent: false, read: true },
-  ],
-  "3": [
-    { id: "1", content: "Don't forget the meeting today", time: "10:00", sent: false, read: true },
-    { id: "2", content: "Got it, I'll be there", time: "10:05", sent: true, read: true },
-    { id: "3", content: "Meeting at 3pm", time: "10:15", sent: false, read: true },
-  ],
-  "4": [
-    { id: "1", content: "Could you help me with the report?", time: "Yesterday", sent: false, read: true },
-    { id: "2", content: "Of course! Let me take a look", time: "Yesterday", sent: true, read: true },
-    { id: "3", content: "Thanks for your help", time: "Yesterday", sent: false, read: true },
-  ],
-  "5": [
-    { id: "1", content: "Do you have the files?", time: "Yesterday", sent: true, read: true },
-    { id: "2", content: "Sure, I'll send it over", time: "Yesterday", sent: false, read: true },
-  ],
+type Chat = {
+  id: string
+  name: string
+  lastMessage: string
+  time: string
+  unread: number
+  status: string
+  role: string
+  pinned: boolean
+}
+
+type IncomingMessage = {
+  id: string
+  senderId: number
+  senderEmail: string
+  content: string
+  timestamp: string
 }
 
 type ChatPageProps = {
   user: UserDto
+  token: string
 }
 
-export function ChatPage({ user }: ChatPageProps) {
-  const [selectedChat, setSelectedChat] = useState<string | null>("1")
-  const [chats, setChats] = useState(DEMO_CHATS)
-  const [messages, setMessages] = useState(DEMO_MESSAGES)
+export function ChatPage({ user, token }: ChatPageProps) {
+  const [selectedChat, setSelectedChat] = useState<string | null>(null)
+  const [chats, setChats] = useState<Chat[]>([])
+  const [messages, setMessages] = useState<Record<string, Message[]>>({})
   const [search, setSearch] = useState("")
+  const [typingUsers, setTypingUsers] = useState<Set<number>>(new Set())
+  const [showMembersModal, setShowMembersModal] = useState(false)
+  const typingTimeouts = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map())
+
+  useEffect(() => {
+    const loadUserRooms = async () => {
+      try {
+        const response = await fetch("/api/chat/rooms")
+
+        const data = await response.json()
+        
+        const rooms = data?.object ?? []
+
+        setChats(
+          rooms.map((room: any) => ({
+            id: String(room.id),
+            name: room.name,
+            lastMessage: "",
+            time: "",
+            unread: 0,
+            status: "Offline",
+            description: room.description,
+            pinned: false,
+          }))
+        )
+        
+        // Automatically select the first room if none is selected
+        if (rooms.length > 0 && !selectedChat) {
+          setSelectedChat(String(rooms[0].id))
+        }
+      } catch (error) {
+        console.error("❌ Error loading user rooms:", error)
+      }
+    }
+
+    loadUserRooms()
+  }, [user.id])
+
+  // Auto-load room history when selected chat changes
+  useEffect(() => {
+    if (selectedChat) {
+      const socket = getSocket(token)
+      // Emit join room event to load history
+      socket.emit("chat:join_room", { roomId: Number(selectedChat) })
+    }
+  }, [selectedChat, token])
+
+  // Auto-join all rooms to receive real-time messages
+  useEffect(() => {
+    const socket = getSocket(token)
+    if (chats.length > 0) {
+      chats.forEach(chat => {
+        socket.emit("chat:join_room", { roomId: Number(chat.id) })
+      })
+    }
+  }, [chats, token])
+
+  useEffect(() => {
+    // Connect to WebSocket immediately when page loads
+    const socket = getSocket(token)
+
+    socket.on("chat:new_message", (data) => {
+      const { roomId, message } = data
+      const chatId = String(roomId)
+      const newMessage: Message = {
+        id: String(message.id),
+        content: message.content,
+        time: new Date(message.created_at).toLocaleTimeString("en-US", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        }),
+        sent: message.user_id === user.id,
+        read: false,
+        senderName: message.user_id === user.id ? undefined : (
+          message.user?.firstName && message.user?.lastName 
+            ? `${message.user.firstName} ${message.user.lastName}`
+            : message.user?.firstName || message.user?.lastName || message.user?.email || `User ${message.user_id}`
+        ),
+        senderId: message.user_id,
+      }
+
+      setMessages((prev) => ({
+        ...prev,
+        [chatId]: [...(prev[chatId] ?? []), newMessage],
+      }))
+
+      setChats((prev) =>
+        prev.map((chat) =>
+          chat.id === chatId
+            ? { 
+                ...chat, 
+                lastMessage: message.content, 
+                time: "Now", 
+                unread: selectedChatRef.current === chatId ? chat.unread : chat.unread + 1 
+              }
+            : chat,
+        ),
+      )
+    })
+
+    socket.on("chat:history", (data) => {
+      const { roomId, messages: historyMessages } = data
+      const chatId = String(roomId)
+      
+      const formattedMessages = historyMessages.map((msg: any) => ({
+        id: String(msg.id),
+        content: msg.content,
+        time: new Date(msg.created_at).toLocaleTimeString("en-US", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        }),
+        sent: msg.user_id === user.id,
+        read: false,
+        senderName: msg.user_id === user.id ? undefined : (
+          msg.user?.firstName && msg.user?.lastName 
+            ? `${msg.user.firstName} ${msg.user.lastName}`
+            : msg.user?.firstName || msg.user?.lastName || msg.user?.email || `User ${msg.user_id}`
+        ),
+        senderId: msg.user_id,
+      }))
+      
+      setMessages((prev) => ({
+        ...prev,
+        [chatId]: formattedMessages,
+      }))
+    })
+
+    socket.on("chat:room_created", (data) => {
+      const { room } = data
+      const newRoom = {
+        id: String(room.id),
+        name: room.name,
+        lastMessage: "",
+        time: new Date().toLocaleTimeString(),
+        unread: 0,
+        status: "active",
+        description: room.description,
+        pinned: false
+      }
+
+      setChats((prev) => [newRoom, ...prev])
+      setSelectedChat(String(room.id))
+    })
+
+    socket.on("chat:room_invitation", (data) => {
+      const { room, invitedBy } = data
+      const newRoom = {
+        id: String(room.id),
+        name: room.name,
+        lastMessage: "",
+        time: new Date().toLocaleTimeString(),
+        unread: 1,
+        status: "active",
+        description: room.description,
+        pinned: false
+      }
+
+      setChats((prev) => {
+        const existing = prev.find(chat => chat.id === String(room.id))
+        if (existing) {
+          return prev.map(chat => 
+            chat.id === String(room.id) 
+              ? { ...chat, unread: chat.unread + 1 }
+              : chat
+          )
+        } else {
+          return [newRoom, ...prev]
+        }
+      })
+    })
+
+    socket.on("chat:typing", ({ senderId, isTyping }: { senderId: number; isTyping: boolean }) => {
+      setTypingUsers((prev) => {
+        const next = new Set(prev)
+        if (isTyping) {
+          next.add(senderId)
+          const existing = typingTimeouts.current.get(senderId)
+          if (existing) clearTimeout(existing)
+          typingTimeouts.current.set(
+            senderId,
+            setTimeout(() => {
+              setTypingUsers((s) => {
+                const n = new Set(s)
+                n.delete(senderId)
+                return n
+              })
+            }, 3000),
+          )
+        } else {
+          next.delete(senderId)
+        }
+        return next
+      })
+
+      setChats((prev) =>
+        prev.map((chat) =>
+          chat.id === String(senderId)
+            ? { ...chat, status: isTyping ? "Typing..." : "Online" }
+            : chat,
+        ),
+      )
+    })
+
+    return () => {
+      console.log("🧹 Cleaning up WebSocket listeners...")
+      socket.off("chat:new_message")
+      socket.off("chat:history")
+      socket.off("chat:room_created")
+      socket.off("chat:room_invitation")
+      socket.off("chat:typing")
+      disconnectSocket()
+    }
+  }, [token, user.id])
+
+  const selectedChatRef = useRef<string | null>(null)
+  selectedChatRef.current = selectedChat
 
   const filteredChats = useMemo(() => {
     const query = search.trim().toLowerCase()
-
-    if (!query) {
-      return chats
-    }
-
+    if (!query) return chats
     return chats.filter(
       (chat) =>
         chat.name.toLowerCase().includes(query) || chat.lastMessage.toLowerCase().includes(query),
@@ -130,13 +290,38 @@ export function ChatPage({ user }: ChatPageProps) {
   const selectedChatData = chats.find((chat) => chat.id === selectedChat)
   const hasSearchResults = filteredChats.length > 0
 
-  const handleSendMessage = (content: string) => {
-    if (!selectedChat) {
-      return
-    }
+  const handleLeaveRoom = async () => {
+    if (!selectedChat) return
 
-    const newMessage = {
-      id: Date.now().toString(),
+    try {
+      const response = await fetch("/api/chat/leave", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roomId: Number(selectedChat) })
+      })
+
+      const data = await response.json()
+
+      if (response.ok && !data.error) {
+        // Remove the chat from the list and deselect it
+        setChats((prev) => prev.filter((chat) => chat.id !== selectedChat))
+        setSelectedChat(null)
+      } else {
+        console.error("Failed to leave room:", data.messages?.[0]?.message || "Unknown error")
+      }
+    } catch (error) {
+      console.error("❌ Error leaving room:", error)
+    }
+  }
+
+  const handleSendMessage = (content: string) => {
+    if (!selectedChat) return
+
+    const socket = getSocket(token)
+    const roomId = Number(selectedChat)
+
+    const optimisticMessage: Message = {
+      id: `pending-${Date.now()}`,
       content,
       time: new Date().toLocaleTimeString("en-US", {
         hour: "2-digit",
@@ -147,24 +332,60 @@ export function ChatPage({ user }: ChatPageProps) {
       read: false,
     }
 
-    setMessages((previousMessages) => ({
-      ...previousMessages,
-      [selectedChat]: [...(previousMessages[selectedChat] || []), newMessage],
+    setMessages((prev) => ({
+      ...prev,
+      [selectedChat]: [...(prev[selectedChat] ?? []), optimisticMessage],
     }))
 
-    setChats((previousChats) =>
-      previousChats.map((chat) =>
+    setChats((prev) =>
+      prev.map((chat) =>
         chat.id === selectedChat ? { ...chat, lastMessage: content, time: "Now" } : chat,
       ),
     )
+
+    socket.emit("chat:send_message", {
+      roomId,
+      userId: user.id,
+      content
+    })
+  }
+
+  const handleCreateGroup = async (data: {
+    name: string
+    description: string
+    memberEmails: string[]
+  }) => {
+    const socket = getSocket(token)
+    
+    // Use WebSocket to create room
+    socket.emit("chat:create_room", {
+      name: data.name,
+      description: data.description,
+      creatorId: user.id,
+      memberEmails: data.memberEmails,
+    })
+  }
+
+  const handleShowMembers = () => {
+    setShowMembersModal(true)
   }
 
   const handleSelectChat = (id: string) => {
     setSelectedChat(id)
-    setChats((previousChats) =>
-      previousChats.map((chat) => (chat.id === id ? { ...chat, unread: 0 } : chat)),
+    setChats((prev) =>
+      prev.map((chat) => (chat.id === id ? { ...chat, unread: 0 } : chat)),
     )
+    
+    // Join the room to get history
+    const socket = getSocket(token)
+    socket.emit("chat:join_room", {
+      roomId: Number(id),
+      userId: user.id
+    })
   }
+
+  const selectedChatTyping =
+    selectedChat !== null && typingUsers.has(Number(selectedChat))
 
   return (
     <div className="min-h-screen p-3 md:p-4">
@@ -180,6 +401,7 @@ export function ChatPage({ user }: ChatPageProps) {
             searchValue={search}
             onSearchChange={setSearch}
             conversationCount={chats.length}
+            onCreateGroup={handleCreateGroup}
           />
           <div className="flex-1 space-y-6 overflow-y-auto px-4 pb-4">
             {hasSearchResults ? (
@@ -240,14 +462,16 @@ export function ChatPage({ user }: ChatPageProps) {
             <>
               <ChatHeader
                 name={selectedChatData.name}
-                status={selectedChatData.status}
-                role={selectedChatData.role}
+                status={selectedChatTyping ? "Typing..." : selectedChatData.status}
+                description={selectedChatData.description}
                 unreadCount={selectedChatData.unread}
                 showBackButton
                 onBack={() => setSelectedChat(null)}
+                onLeaveRoom={handleLeaveRoom}
+                onShowMembers={handleShowMembers}
               />
               <div className="flex-1 overflow-y-auto">
-                <MessageList messages={messages[selectedChat] || []} />
+                <MessageList messages={messages[selectedChat] ?? []} />
               </div>
               <MessageInput onSend={handleSendMessage} />
             </>
@@ -260,7 +484,7 @@ export function ChatPage({ user }: ChatPageProps) {
                   </EmptyMedia>
                   <EmptyTitle>Select a conversation</EmptyTitle>
                   <EmptyDescription>
-                    Open a chat from the left to see the refreshed header, cleaner message layout, and updated composer.
+                    Open a chat from the left to start messaging.
                   </EmptyDescription>
                 </EmptyHeader>
               </Empty>
@@ -268,6 +492,16 @@ export function ChatPage({ user }: ChatPageProps) {
           )}
         </main>
       </div>
+
+      {/* Room Members Modal */}
+      {selectedChat && selectedChatData && (
+        <RoomMembersModal
+          isOpen={showMembersModal}
+          onClose={() => setShowMembersModal(false)}
+          roomId={Number(selectedChat)}
+          roomName={selectedChatData.name}
+        />
+      )}
     </div>
   )
 }

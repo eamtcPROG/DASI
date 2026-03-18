@@ -11,7 +11,7 @@ interface Chat {
   time: string
   unread: number
   status: string
-  role: string
+  description?: string
   pinned?: boolean
 }
 
@@ -34,39 +34,34 @@ export function ChatList({ chats, selectedChat, onSelectChat }: ChatListProps) {
               "border-primary/25 bg-background shadow-lg shadow-primary/8 ring-1 ring-primary/10",
           )}
         >
-          <Avatar className="h-12 w-12 shrink-0">
-            <AvatarFallback className="bg-secondary text-sm font-medium text-secondary-foreground">
-              {chat.name
-                .split(" ")
-                .map((namePart) => namePart[0])
-                .join("")
-                .slice(0, 2)}
-            </AvatarFallback>
-          </Avatar>
+          <div className="flex items-center gap-3">
+            <Avatar className="h-12 w-12 shrink-0">
+              <AvatarFallback className="bg-secondary text-sm font-medium text-secondary-foreground">
+                {chat.name
+                  .split(" ")
+                  .map((namePart) => namePart[0])
+                  .join("")
+                  .slice(0, 2)}
+              </AvatarFallback>
+            </Avatar>
 
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center justify-between">
-              <div className="flex min-w-0 items-center gap-2">
-                <span className="truncate text-sm font-medium text-foreground">{chat.name}</span>
-                {chat.pinned ? <Pin className="size-3.5 text-primary" /> : null}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between">
+                <div className="flex min-w-0 items-center gap-2">
+                  {chat.pinned ? <Pin className="size-3.5 text-primary" /> : null}
+                  <span className="truncate text-sm font-medium text-foreground">{chat.name}</span>
+                </div>
+                <span className="text-xs text-muted-foreground">{chat.time}</span>
               </div>
-              <span className="text-xs text-muted-foreground">{chat.time}</span>
-            </div>
 
-            <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="inline-flex size-2 rounded-full bg-primary/80" />
-              <span>{chat.status}</span>
-              <span className="text-border">•</span>
-              <span>{chat.role}</span>
-            </div>
-
-            <div className="mt-2 flex items-center justify-between gap-3">
-              <p className="line-clamp-2 text-sm leading-6 text-muted-foreground">{chat.lastMessage}</p>
-              {chat.unread > 0 && (
-                <span className="inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">
-                  {chat.unread}
-                </span>
-              )}
+              <div className="mt-2 flex items-center justify-between gap-3">
+                <p className="line-clamp-2 text-sm leading-6 text-muted-foreground">{chat.lastMessage}</p>
+                {chat.unread > 0 && (
+                  <span className="inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">
+                    {chat.unread}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         </button>

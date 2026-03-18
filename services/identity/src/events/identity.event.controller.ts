@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   HttpException,
   HttpStatus,
@@ -29,6 +30,10 @@ type RefreshTokenRequest = {
 type UserListRequest = {
   page?: number;
   onPage?: number;
+};
+
+type UsersByIdsRequest = {
+  userIds: number[];
 };
 
 @Controller()
@@ -128,6 +133,33 @@ export class IdentityEventController {
         [],
         0,
         0,
+        true,
+        this.extractStatus(error),
+        [new MessageDto(this.extractMessage(error), MessageType.ERROR)],
+      );
+    } finally {
+      channel.ack(originalMsg);
+    }
+  }
+
+  @MessagePattern('get_users_by_ids')
+  async handleGetUsersByIds(
+    @Payload() data: UsersByIdsRequest,
+    @Ctx() context: RmqContext,
+  ): Promise<ResultObjectDto<UserDto[]>> {
+    const channel = context.getChannelRef();
+    const originalMsg = context.getMessage();
+
+    try {
+      if (!data?.userIds || !Array.isArray(data.userIds)) {
+        throw new BadRequestException('User IDs array is required');
+      }
+
+      const users = await this.userService.findByIds(data.userIds);
+      return new ResultObjectDto(users, false, HttpStatus.OK);
+    } catch (error) {
+      return new ResultObjectDto(
+        [],
         true,
         this.extractStatus(error),
         [new MessageDto(this.extractMessage(error), MessageType.ERROR)],
