@@ -12,8 +12,7 @@ RUN npm run build
 # Production stage
 FROM node:alpine AS production
 
-ARG NODE_ENV=production
-ENV NODE_ENV=${NODE_ENV}
+ENV NODE_ENV=production
 
 WORKDIR /app
 

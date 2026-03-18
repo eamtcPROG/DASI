@@ -1,17 +1,23 @@
 name: dasi
+x-app-service: &app-service
+  restart: unless-stopped
+  init: true
+  networks:
+    - dasi-net
+
 services:
   gateway:
+    <<: *app-service
     container_name: gateway-service
     build:
       context: ./gateway
       dockerfile: Dockerfile
-    command: npm run start:prod
     ports:
       - 3000:3000
-    volumes:
-      - ./gateway:/app
+    env_file:
+      - ./gateway/env/.env.production
     environment:
-      - NODE_ENV=production
+      NODE_ENV: production
     depends_on:
       - identity
       - analytics
@@ -20,20 +26,22 @@ services:
       - dasi-net
 
   identity:
+    <<: *app-service
     container_name: identity-service
     build:
       context: ./identity
       dockerfile: Dockerfile
-    command: npm run start:prod
+    env_file:
+      - ./identity/env/.env.production
     ports:
       - 3001:3001
-    volumes:
-      - ./identity:/app
     environment:
-      - NODE_ENV=production
+      NODE_ENV: production
     depends_on:
-      - postgres-identity
-      - rabbitmq
+      postgres-identity:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     networks:
       - dasi-net
 
@@ -59,22 +67,23 @@ services:
     networks:
       - dasi-net
   
-
   analytics:
+    <<: *app-service
     container_name: analytics-service
     build:
       context: ./analytics
       dockerfile: Dockerfile
-    command: npm run start:prod
+    env_file:
+      - ./analytics/env/.env.production
     ports:
       - 3002:3002
-    volumes:
-      - ./analytics:/app
     environment:
-      - NODE_ENV=production
+      NODE_ENV: production
     depends_on:
-      - postgres-analytics
-      - rabbitmq
+      postgres-analytics:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     networks:
       - dasi-net
 
@@ -99,17 +108,66 @@ services:
     networks:
       - dasi-net
 
+
+  chat:
+    <<: *app-service
+    container_name: chat-service
+    build:
+      context: ./chat
+      dockerfile: Dockerfile
+    env_file:
+      - ./chat/env/.env.production
+    ports:
+      - 3003:3003
+    environment:
+      NODE_ENV: production
+    depends_on:
+      postgres-chat:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - dasi-net
+
+  postgres-chat:
+    image: postgres:16-alpine
+    container_name: postgres-chat
+    ports:
+      - 5434:5432
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: chat
+      PGDATA: /var/lib/postgresql/data/pgdata 
+    volumes:
+      - postgres-chat-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - dasi-net
+
   rabbitmq:
     image: rabbitmq
     container_name: rabbitmq
     ports:
       - 5672:5672
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
     networks:
       - dasi-net
 
 volumes:
   postgres-identity-data:
   postgres-analytics-data:
+  postgres-chat-data:
 networks:
   dasi-net:
     driver: bridge

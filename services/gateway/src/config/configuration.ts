@@ -6,6 +6,7 @@ export default () => ({
     url: process.env.RABBITMQ_URI,
     identityQueue: process.env.RMQ_IDENTITY_QUEUE ?? 'user',
     analyticsQueue: process.env.RMQ_ANALYTICS_QUEUE ?? 'analytics',
+    chatQueue: process.env.RMQ_CHAT_QUEUE ?? 'chat',
   },
   redis: {
     host: process.env.REDIS_HOST,

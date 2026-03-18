@@ -8,6 +8,7 @@ import { ChatList } from "@/components/chat/chat-list"
 import { ChatHeader } from "@/components/chat/chat-header"
 import { MessageList } from "@/components/chat/message-list"
 import { MessageInput } from "@/components/chat/message-input"
+import { RoomMembersModal } from "@/components/chat/room-members-modal"
 import {
   Empty,
   EmptyDescription,
@@ -16,7 +17,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 import { type UserDto, getUserDisplayName } from "@/lib/auth"
-import { getSocket, disconnectSocket } from "@/lib/socket"
+import { getSocket, disconnectSocket, getSocketStatus } from "@/lib/socket"
 import { cn } from "@/lib/utils"
 
 type Message = {
@@ -57,45 +58,85 @@ export function ChatPage({ user, token }: ChatPageProps) {
   const [messages, setMessages] = useState<Record<string, Message[]>>({})
   const [search, setSearch] = useState("")
   const [typingUsers, setTypingUsers] = useState<Set<number>>(new Set())
+  const [showMembersModal, setShowMembersModal] = useState(false)
   const typingTimeouts = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map())
 
   useEffect(() => {
-    fetch("/api/auth/users?onPage=50")
-      .then((res) => res.json())
-      .then((data) => {
-        const users: UserDto[] = data?.objects ?? []
-        const filtered = users.filter((u) => u.id !== user.id)
+    const loadUserRooms = async () => {
+      try {
+        const response = await fetch("/api/chat/rooms")
+
+        const data = await response.json()
+        
+        const rooms = data?.object ?? []
+
         setChats(
-          filtered.map((u) => ({
-            id: String(u.id),
-            name: getUserDisplayName(u),
+          rooms.map((room: any) => ({
+            id: String(room.id),
+            name: room.name,
             lastMessage: "",
             time: "",
             unread: 0,
             status: "Offline",
-            role: u.email,
+            description: room.description,
             pinned: false,
-          })),
+          }))
         )
-      })
-      .catch(() => {})
+        
+        // Automatically select the first room if none is selected
+        if (rooms.length > 0 && !selectedChat) {
+          setSelectedChat(String(rooms[0].id))
+        }
+      } catch (error) {
+        console.error("❌ Error loading user rooms:", error)
+      }
+    }
+
+    loadUserRooms()
   }, [user.id])
 
+  // Auto-load room history when selected chat changes
+  useEffect(() => {
+    if (selectedChat) {
+      const socket = getSocket(token)
+      // Emit join room event to load history
+      socket.emit("chat:join_room", { roomId: Number(selectedChat) })
+    }
+  }, [selectedChat, token])
+
+  // Auto-join all rooms to receive real-time messages
   useEffect(() => {
     const socket = getSocket(token)
+    if (chats.length > 0) {
+      chats.forEach(chat => {
+        socket.emit("chat:join_room", { roomId: Number(chat.id) })
+      })
+    }
+  }, [chats, token])
 
-    socket.on("message:receive", (msg: IncomingMessage) => {
-      const chatId = String(msg.senderId)
+  useEffect(() => {
+    // Connect to WebSocket immediately when page loads
+    const socket = getSocket(token)
+
+    socket.on("chat:new_message", (data) => {
+      const { roomId, message } = data
+      const chatId = String(roomId)
       const newMessage: Message = {
-        id: msg.id,
-        content: msg.content,
-        time: new Date(msg.timestamp).toLocaleTimeString("en-US", {
+        id: String(message.id),
+        content: message.content,
+        time: new Date(message.created_at).toLocaleTimeString("en-US", {
           hour: "2-digit",
           minute: "2-digit",
           hour12: false,
         }),
-        sent: false,
+        sent: message.user_id === user.id,
         read: false,
+        senderName: message.user_id === user.id ? undefined : (
+          message.user?.firstName && message.user?.lastName 
+            ? `${message.user.firstName} ${message.user.lastName}`
+            : message.user?.firstName || message.user?.lastName || message.user?.email || `User ${message.user_id}`
+        ),
+        senderId: message.user_id,
       }
 
       setMessages((prev) => ({
@@ -106,28 +147,90 @@ export function ChatPage({ user, token }: ChatPageProps) {
       setChats((prev) =>
         prev.map((chat) =>
           chat.id === chatId
-            ? { ...chat, lastMessage: msg.content, time: "Now", unread: chat.unread + 1 }
+            ? { 
+                ...chat, 
+                lastMessage: message.content, 
+                time: "Now", 
+                unread: selectedChatRef.current === chatId ? chat.unread : chat.unread + 1 
+              }
             : chat,
         ),
       )
     })
 
-    socket.on("message:sent", (msg: IncomingMessage) => {
-      const chatId = String(
-        selectedChatRef.current ?? 0,
-      )
-      setMessages((prev) => {
-        const existing = prev[chatId] ?? []
-        return {
-          ...prev,
-          [chatId]: existing.map((m) =>
-            m.id === `pending-${msg.id}` ? { ...m, id: msg.id, read: false } : m,
-          ),
+    socket.on("chat:history", (data) => {
+      const { roomId, messages: historyMessages } = data
+      const chatId = String(roomId)
+      
+      const formattedMessages = historyMessages.map((msg: any) => ({
+        id: String(msg.id),
+        content: msg.content,
+        time: new Date(msg.created_at).toLocaleTimeString("en-US", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        }),
+        sent: msg.user_id === user.id,
+        read: false,
+        senderName: msg.user_id === user.id ? undefined : (
+          msg.user?.firstName && msg.user?.lastName 
+            ? `${msg.user.firstName} ${msg.user.lastName}`
+            : msg.user?.firstName || msg.user?.lastName || msg.user?.email || `User ${msg.user_id}`
+        ),
+        senderId: msg.user_id,
+      }))
+      
+      setMessages((prev) => ({
+        ...prev,
+        [chatId]: formattedMessages,
+      }))
+    })
+
+    socket.on("chat:room_created", (data) => {
+      const { room } = data
+      const newRoom = {
+        id: String(room.id),
+        name: room.name,
+        lastMessage: "",
+        time: new Date().toLocaleTimeString(),
+        unread: 0,
+        status: "active",
+        description: room.description,
+        pinned: false
+      }
+
+      setChats((prev) => [newRoom, ...prev])
+      setSelectedChat(String(room.id))
+    })
+
+    socket.on("chat:room_invitation", (data) => {
+      const { room, invitedBy } = data
+      const newRoom = {
+        id: String(room.id),
+        name: room.name,
+        lastMessage: "",
+        time: new Date().toLocaleTimeString(),
+        unread: 1,
+        status: "active",
+        description: room.description,
+        pinned: false
+      }
+
+      setChats((prev) => {
+        const existing = prev.find(chat => chat.id === String(room.id))
+        if (existing) {
+          return prev.map(chat => 
+            chat.id === String(room.id) 
+              ? { ...chat, unread: chat.unread + 1 }
+              : chat
+          )
+        } else {
+          return [newRoom, ...prev]
         }
       })
     })
 
-    socket.on("message:typing", ({ senderId, isTyping }: { senderId: number; isTyping: boolean }) => {
+    socket.on("chat:typing", ({ senderId, isTyping }: { senderId: number; isTyping: boolean }) => {
       setTypingUsers((prev) => {
         const next = new Set(prev)
         if (isTyping) {
@@ -160,12 +263,15 @@ export function ChatPage({ user, token }: ChatPageProps) {
     })
 
     return () => {
-      socket.off("message:receive")
-      socket.off("message:sent")
-      socket.off("message:typing")
+      console.log("🧹 Cleaning up WebSocket listeners...")
+      socket.off("chat:new_message")
+      socket.off("chat:history")
+      socket.off("chat:room_created")
+      socket.off("chat:room_invitation")
+      socket.off("chat:typing")
       disconnectSocket()
     }
-  }, [token])
+  }, [token, user.id])
 
   const selectedChatRef = useRef<string | null>(null)
   selectedChatRef.current = selectedChat
@@ -184,15 +290,38 @@ export function ChatPage({ user, token }: ChatPageProps) {
   const selectedChatData = chats.find((chat) => chat.id === selectedChat)
   const hasSearchResults = filteredChats.length > 0
 
+  const handleLeaveRoom = async () => {
+    if (!selectedChat) return
+
+    try {
+      const response = await fetch("/api/chat/leave", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roomId: Number(selectedChat) })
+      })
+
+      const data = await response.json()
+
+      if (response.ok && !data.error) {
+        // Remove the chat from the list and deselect it
+        setChats((prev) => prev.filter((chat) => chat.id !== selectedChat))
+        setSelectedChat(null)
+      } else {
+        console.error("Failed to leave room:", data.messages?.[0]?.message || "Unknown error")
+      }
+    } catch (error) {
+      console.error("❌ Error leaving room:", error)
+    }
+  }
+
   const handleSendMessage = (content: string) => {
     if (!selectedChat) return
 
     const socket = getSocket(token)
-    const recipientId = Number(selectedChat)
+    const roomId = Number(selectedChat)
 
-    const pendingId = `pending-${Date.now()}`
     const optimisticMessage: Message = {
-      id: pendingId,
+      id: `pending-${Date.now()}`,
       content,
       time: new Date().toLocaleTimeString("en-US", {
         hour: "2-digit",
@@ -214,7 +343,31 @@ export function ChatPage({ user, token }: ChatPageProps) {
       ),
     )
 
-    socket.emit("message:send", { recipientId, content })
+    socket.emit("chat:send_message", {
+      roomId,
+      userId: user.id,
+      content
+    })
+  }
+
+  const handleCreateGroup = async (data: {
+    name: string
+    description: string
+    memberEmails: string[]
+  }) => {
+    const socket = getSocket(token)
+    
+    // Use WebSocket to create room
+    socket.emit("chat:create_room", {
+      name: data.name,
+      description: data.description,
+      creatorId: user.id,
+      memberEmails: data.memberEmails,
+    })
+  }
+
+  const handleShowMembers = () => {
+    setShowMembersModal(true)
   }
 
   const handleSelectChat = (id: string) => {
@@ -222,6 +375,13 @@ export function ChatPage({ user, token }: ChatPageProps) {
     setChats((prev) =>
       prev.map((chat) => (chat.id === id ? { ...chat, unread: 0 } : chat)),
     )
+    
+    // Join the room to get history
+    const socket = getSocket(token)
+    socket.emit("chat:join_room", {
+      roomId: Number(id),
+      userId: user.id
+    })
   }
 
   const selectedChatTyping =
@@ -241,6 +401,7 @@ export function ChatPage({ user, token }: ChatPageProps) {
             searchValue={search}
             onSearchChange={setSearch}
             conversationCount={chats.length}
+            onCreateGroup={handleCreateGroup}
           />
           <div className="flex-1 space-y-6 overflow-y-auto px-4 pb-4">
             {hasSearchResults ? (
@@ -302,10 +463,12 @@ export function ChatPage({ user, token }: ChatPageProps) {
               <ChatHeader
                 name={selectedChatData.name}
                 status={selectedChatTyping ? "Typing..." : selectedChatData.status}
-                role={selectedChatData.role}
+                description={selectedChatData.description}
                 unreadCount={selectedChatData.unread}
                 showBackButton
                 onBack={() => setSelectedChat(null)}
+                onLeaveRoom={handleLeaveRoom}
+                onShowMembers={handleShowMembers}
               />
               <div className="flex-1 overflow-y-auto">
                 <MessageList messages={messages[selectedChat] ?? []} />
@@ -329,6 +492,16 @@ export function ChatPage({ user, token }: ChatPageProps) {
           )}
         </main>
       </div>
+
+      {/* Room Members Modal */}
+      {selectedChat && selectedChatData && (
+        <RoomMembersModal
+          isOpen={showMembersModal}
+          onClose={() => setShowMembersModal(false)}
+          roomId={Number(selectedChat)}
+          roomName={selectedChatData.name}
+        />
+      )}
     </div>
   )
 }

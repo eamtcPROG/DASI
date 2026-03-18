@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useRef } from "react"
 import { cn } from "@/lib/utils"
 import { Check, CheckCheck } from "lucide-react"
 
@@ -9,6 +10,8 @@ interface Message {
   time: string
   sent: boolean
   read: boolean
+  senderName?: string
+  senderId?: number
 }
 
 interface MessageListProps {
@@ -16,6 +19,16 @@ interface MessageListProps {
 }
 
 export function MessageList({ messages }: MessageListProps) {
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }
+
+  useEffect(() => {
+    scrollToBottom()
+  }, [messages])
+
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-3 px-4 py-6 md:px-6">
       <div className="mx-auto rounded-full border border-border/70 bg-background/75 px-4 py-1.5 text-xs font-medium text-muted-foreground shadow-sm">
@@ -32,6 +45,13 @@ export function MessageList({ messages }: MessageListProps) {
                 : "rounded-bl-md border border-border/70 bg-message-received text-foreground",
             )}
           >
+            {/* Show sender name for received messages */}
+            {!message.sent && message.senderName && (
+              <div className="mb-1 text-xs font-medium text-primary">
+                {message.senderName}
+              </div>
+            )}
+            
             <p className="text-sm leading-7">{message.content}</p>
             <div
               className={cn(
@@ -51,6 +71,9 @@ export function MessageList({ messages }: MessageListProps) {
           </div>
         </div>
       ))}
+      
+      {/* Hidden element to scroll to */}
+      <div ref={messagesEndRef} />
     </div>
   )
 }

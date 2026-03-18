@@ -2,19 +2,25 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { BellDot, LogOut, MessageCircle, Search, ShieldCheck } from "lucide-react"
+import { BellDot, LogOut, MessageCircle, Plus, Search, ShieldCheck, Users } from "lucide-react"
 
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 import { getUserDisplayName, type UserDto } from "@/lib/auth"
+import { CreateGroupModal } from "@/components/chat/create-group-modal"
 
 type SidebarHeaderProps = {
   user: UserDto
   searchValue: string
   onSearchChange: (value: string) => void
   conversationCount: number
+  onCreateGroup?: (data: {
+    name: string
+    description: string
+    memberEmails: string[]
+  }) => void
 }
 
 export function SidebarHeader({
@@ -22,6 +28,7 @@ export function SidebarHeader({
   searchValue,
   onSearchChange,
   conversationCount,
+  onCreateGroup,
 }: SidebarHeaderProps) {
   const router = useRouter()
   const [isSigningOut, setIsSigningOut] = useState(false)
@@ -97,6 +104,16 @@ export function SidebarHeader({
           className="h-11 rounded-2xl border-border/70 bg-background/80 pl-9 text-foreground placeholder:text-muted-foreground"
         />
       </div>
+      {onCreateGroup && (
+        <CreateGroupModal onCreateGroup={onCreateGroup}>
+          <Button
+            className="w-full h-10 mt-4 rounded-2xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
+          >
+            <Plus className="size-4" />
+            Create New Group
+          </Button>
+        </CreateGroupModal>
+      )}
     </div>
   )
 }

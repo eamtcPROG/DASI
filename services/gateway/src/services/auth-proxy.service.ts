@@ -34,6 +34,10 @@ export class AuthProxyService {
     return this.request<ResultListDto<UserDto>>('list_users', { page, onPage });
   }
 
+  getUsersByIds(userIds: number[]) {
+    return this.request<ResultObjectDto<any[]>>('get_users_by_ids', { userIds });
+  }
+
   validateToken(token: string) {
     return this.request<ValidateTokenResponse>('validate_token', { token });
   }
