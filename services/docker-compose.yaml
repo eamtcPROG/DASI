@@ -1,29 +1,118 @@
 name: dasi
+x-app-service: &app-service
+  restart: unless-stopped
+  init: true
+  networks:
+    - dasi-net
+
 services:
+  client:
+    <<: *app-service
+    container_name: client-service
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_GATEWAY_URL: ${NEXT_PUBLIC_GATEWAY_URL:-http://localhost:3000}
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      GATEWAY_URL: http://gateway:3000
+      NEXT_PUBLIC_GATEWAY_URL: ${NEXT_PUBLIC_GATEWAY_URL:-http://localhost:3000}
+      NEXT_TELEMETRY_DISABLED: "1"
+    ports:
+      - ${CLIENT_PORT:-3100}:3000
+    depends_on:
+      gateway:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:3000/signin',res=>process.exit(res.statusCode < 400 ? 0 : 1)).on('error',()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+
+  gateway:
+    <<: *app-service
+    container_name: gateway-service
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    env_file:
+      - ./gateway/env/.env.production
+    ports:
+      - ${GATEWAY_PORT:-3000}:3000
+    environment:
+      NODE_ENV: production
+      SOCKET_CORS_ORIGINS: ${SOCKET_CORS_ORIGINS:-http://localhost:3100,http://127.0.0.1:3100}
+    depends_on:
+      identity:
+        condition: service_healthy
+      analytics:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:3000/health',res=>process.exit(res.statusCode === 200 ? 0 : 1)).on('error',()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 25s
+
+
   identity:
+    <<: *app-service
     container_name: identity-service
     build:
       context: ./identity
       dockerfile: Dockerfile
-    command: npm run start:prod
+    env_file:
+      - ./identity/env/.env.production
     ports:
-      - 3001:3001
-    volumes:
-      - ./identity:/app
+      - ${IDENTITY_PORT:-3001}:3001
     environment:
-      - NODE_ENV=production
+      NODE_ENV: production
     depends_on:
-      - postgres-identity
-      - rabbitmq
-    networks:
-      - dasi-net
+      postgres-identity:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:3001/api',res=>process.exit(res.statusCode < 400 ? 0 : 1)).on('error',()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 25s
+
 
   
   postgres-identity:
     image: postgres:16-alpine
     container_name: postgres-identity
+    restart: unless-stopped
     ports:
-      - 5432:5432
+      - ${POSTGRES_IDENTITY_PORT:-5432}:5432
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -40,30 +129,44 @@ services:
     networks:
       - dasi-net
   
-
   analytics:
+    <<: *app-service
     container_name: analytics-service
     build:
       context: ./analytics
       dockerfile: Dockerfile
-    command: npm run start:prod
+    env_file:
+      - ./analytics/env/.env.production
     ports:
-      - 3002:3002
-    volumes:
-      - ./analytics:/app
+      - ${ANALYTICS_PORT:-3002}:3002
     environment:
-      - NODE_ENV=production
+      NODE_ENV: production
     depends_on:
-      - postgres-analytics
-      - rabbitmq
-    networks:
-      - dasi-net
+      postgres-analytics:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:3002/api',res=>process.exit(res.statusCode < 400 ? 0 : 1)).on('error',()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 25s
+
+
 
   postgres-analytics:
     image: postgres:16-alpine
     container_name: postgres-analytics
+    restart: unless-stopped
     ports:
-      - 5433:5432
+      - ${POSTGRES_ANALYTICS_PORT:-5433}:5432
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -80,17 +183,86 @@ services:
     networks:
       - dasi-net
 
-  rabbitmq:
-    image: rabbitmq
-    container_name: rabbitmq
+
+  chat:
+    <<: *app-service
+    container_name: chat-service
+    build:
+      context: ./chat
+      dockerfile: Dockerfile
+    env_file:
+      - ./chat/env/.env.production
     ports:
-      - 5672:5672
+      - ${CHAT_PORT:-3003}:3003
+    environment:
+      NODE_ENV: production
+    depends_on:
+      postgres-chat:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - dasi-net
+
+  postgres-chat:
+    image: postgres:16-alpine
+    container_name: postgres-chat
+    ports:
+      - 5434:5432
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: chat
+      PGDATA: /var/lib/postgresql/data/pgdata 
+    volumes:
+      - postgres-chat-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - dasi-net
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    container_name: rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - ${RABBITMQ_PORT:-5672}:5672
+      - ${RABBITMQ_MANAGEMENT_PORT:-15672}:15672
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks:
+      - dasi-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: unless-stopped
+    ports:
+      - ${REDIS_PORT:-6379}:6379
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
     networks:
       - dasi-net
 
 volumes:
   postgres-identity-data:
   postgres-analytics-data:
+  postgres-chat-data:
 networks:
   dasi-net:
     driver: bridge

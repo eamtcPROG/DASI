@@ -20,6 +20,14 @@ export class UserService {
     return this.repo.find({ where: { email: email.toLowerCase() } });
   }
 
+  findById(id: number) {
+    return this.repo.findOne({ where: { id } });
+  }
+
+  findByIds(ids: number[]) {
+    return this.repo.findByIds(ids);
+  }
+
   async getList(page: number, onPage: number): Promise<ListDto<UserDto>> {
     const [users, total] = await this.repo.findAndCount({
       skip: ListDto.skip(page, onPage),

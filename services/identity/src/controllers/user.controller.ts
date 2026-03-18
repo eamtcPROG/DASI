@@ -5,6 +5,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Param,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -106,5 +107,57 @@ export class UserController {
   @Get('/')
   getList() {
     return this.userService.getList(1, 10);
+  }
+
+  @ApiOperation({ summary: 'Get user by ID' })
+  @ApiOkResponse({
+    type: ResultObjectDto<UserDto>,
+    description: 'User details',
+  })
+  @ApiBearerAuth('jwt')
+  @UseGuards(JwtGuard)
+  @Get('/:id')
+  async getUserById(@Param('id') id: string) {
+    const user = await this.userService.findById(Number(id));
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+    return new ResultObjectDto(UserDto.fromEntity(user), false, 200);
+  }
+
+  @ApiOperation({ summary: 'Get user IDs by emails' })
+  @ApiConsumes('application/json')
+  @ApiBody({ 
+    type: 'object',
+    schema: {
+      type: 'object',
+      properties: {
+        emails: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Array of email addresses'
+        }
+      }
+    }
+  })
+  @ApiOkResponse({
+    type: ResultObjectDto<{ [email: string]: number }>,
+    description: 'Email to user ID mapping',
+  })
+  @ApiBearerAuth('jwt')
+  @UseGuards(JwtGuard)
+  @Post('/lookup-emails')
+  async lookupEmails(@Body() body: { emails: string[] }) {
+    const result: { [email: string]: number } = {};
+    
+    for (const email of body.emails) {
+      const users = await this.userService.findByEmail(email);
+      const user = users[0]; // Get first user found
+      if (user) {
+        result[email] = user.id;
+      }
+    }
+    
+    return new ResultObjectDto(result, false, 200);
   }
 }
