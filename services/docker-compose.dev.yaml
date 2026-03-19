@@ -22,27 +22,6 @@ services:
     networks:
       - dasi-net
 
-  postgres-analytics:
-    image: postgres:16-alpine
-    container_name: postgres-analytics
-    ports:
-      - 5433:5432
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: analytics
-      PGDATA: /var/lib/postgresql/data/pgdata 
-    volumes:
-      - postgres-analytics-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-    networks:
-      - dasi-net
-
   rabbitmq:
     image: rabbitmq
     container_name: rabbitmq
@@ -51,9 +30,33 @@ services:
     networks:
       - dasi-net
 
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - 6379:6379
+    networks:
+      - dasi-net
+
+  postgres-analytics:
+    image: mongo:7
+    container_name: mongo-analytics
+    ports:
+      - 27017:27017
+    volumes:
+      - mongo-analytics-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 }).ok ? quit(0) : quit(1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks:
+      - dasi-net
+
 volumes:
   postgres-identity-data:
-  postgres-analytics-data:
+  mongo-analytics-data:
 networks:
   dasi-net:
     driver: bridge

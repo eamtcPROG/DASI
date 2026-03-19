@@ -1,41 +1,65 @@
-import {
-  Inject,
-  Injectable,
-  ServiceUnavailableException,
-} from '@nestjs/common';
-import { ClientProxy } from '@nestjs/microservices';
-import { TimeoutError, firstValueFrom, timeout } from 'rxjs';
-import { ResultObjectDto } from '../dto/resultobject.dto';
+import { Injectable } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 
-export type AnalyticsType = 'messages' | 'users' | 'general';
+export type AnalyticsStats = {
+  totalUsers: number;
+  totalMessages: number;
+  totalChats?: number;
+  updatedAt: string;
+  lastMessageAt?: string | null;
+};
+
+export type AnalyticsActivityPoint = {
+  bucket: string;
+  messages: number;
+  users: number;
+  chats?: number;
+};
 
 @Injectable()
 export class AnalyticsProxyService {
-  constructor(
-    @Inject('ANALYTICS_SERVICE') private readonly analyticsClient: ClientProxy,
-  ) {}
+  constructor(private readonly config: ConfigService) {}
 
-  getAnalytics(type: AnalyticsType) {
-    return this.request<ResultObjectDto<unknown>>('get_analytics', { type });
+  async getStats(): Promise<AnalyticsStats | null> {
+    const baseUrl = this.config.get<string>("analytics.baseUrl");
+    if (!baseUrl) return null;
+    const url = `${baseUrl.replace(/\/$/, "")}/stats`;
+    try {
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) return null;
+      return (await res.json()) as AnalyticsStats;
+    } catch {
+      return null;
+    }
   }
 
-  private async request<T>(pattern: string, payload: unknown): Promise<T> {
+  async getActivity(
+    range: "1m" | "1h" | "1d" | "7d" | "30d",
+  ): Promise<AnalyticsActivityPoint[] | null> {
+    const baseUrl = this.config.get<string>("analytics.baseUrl");
+    if (!baseUrl) return null;
+    const url = `${baseUrl.replace(/\/$/, "")}/stats/activity?range=${range}`;
     try {
-      return await firstValueFrom(
-        this.analyticsClient
-          .send<T, unknown>(pattern, payload)
-          .pipe(timeout(5000)),
-      );
-    } catch (error) {
-      if (error instanceof TimeoutError) {
-        throw new ServiceUnavailableException('Analytics service timeout');
-      }
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) return null;
+      return (await res.json()) as AnalyticsActivityPoint[];
+    } catch {
+      return null;
+    }
+  }
 
-      if (error instanceof Error) {
-        throw new ServiceUnavailableException(error.message);
-      }
-
-      throw new ServiceUnavailableException('Analytics service unavailable');
+  async getMessageTimes(
+    range: "1m" | "1h" | "1d" | "7d" | "30d",
+  ): Promise<string[] | null> {
+    const baseUrl = this.config.get<string>("analytics.baseUrl");
+    if (!baseUrl) return null;
+    const url = `${baseUrl.replace(/\/$/, "")}/stats/message-times?range=${range}`;
+    try {
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) return null;
+      return (await res.json()) as string[];
+    } catch {
+      return null;
     }
   }
 }

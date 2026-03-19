@@ -115,6 +115,23 @@ export class ChatService {
     return this.messageRepository.save(message);
   }
 
+  async getMessageTimes(): Promise<string[]> {
+    const rows = await this.messageRepository
+      .createQueryBuilder('m')
+      .select('m.created_at', 'createdAt')
+      .where('m.is_deleted = :deleted', { deleted: false })
+      .orderBy('m.created_at', 'ASC')
+      .getRawMany<{ createdAt: Date | string | null }>();
+
+    return rows
+      .map((row) => {
+        if (!row?.createdAt) return null;
+        const date = new Date(row.createdAt);
+        return Number.isNaN(date.getTime()) ? null : date.toISOString();
+      })
+      .filter((value): value is string => value !== null);
+  }
+
   /**
    * Create a new room with members
    */
@@ -161,19 +178,59 @@ export class ChatService {
     };
   }
   /**
-   * Get chat about messages
-   * TODO: Implement message chat
+   * Get real stats from DB (total messages, rooms, avg length, first message date).
+   */
+  async getStats(): Promise<{
+    totalMessages: number;
+    totalRooms: number;
+    averageMessageLength: number;
+    firstMessageAt: Date | null;
+  }> {
+    const totalMessages = await this.messageRepository.count();
+    const totalRooms = await this.roomRepository.count();
+
+    const avgRaw = await this.messageRepository
+      .createQueryBuilder('m')
+      .select('AVG(LENGTH(m.content))', 'avg')
+      .where('m.is_deleted = :deleted', { deleted: false })
+      .getRawOne<{ avg: string | null }>();
+    const averageMessageLength = avgRaw?.avg ? Math.round(Number(avgRaw.avg)) : 0;
+
+    const firstRaw = await this.messageRepository
+      .createQueryBuilder('m')
+      .select('MIN(m.created_at)', 'min')
+      .where('m.is_deleted = :deleted', { deleted: false })
+      .getRawOne<{ min: Date | null }>();
+    const firstMessageAt = firstRaw?.min ?? null;
+
+    return {
+      totalMessages,
+      totalRooms,
+      averageMessageLength,
+      firstMessageAt,
+    };
+  }
+
+  /**
+   * Get chat about messages (delegates to stats for real counts).
    */
   async getMessageChat(): Promise<{
     totalMessages: number;
     messagesPerDay: number;
     averageMessageLength: number;
   }> {
-    // Placeholder implementation
+    const stats = await this.getStats();
+    const daysSinceFirst =
+      stats.firstMessageAt == null
+        ? 1
+        : Math.max(
+            1,
+            (Date.now() - new Date(stats.firstMessageAt).getTime()) / 86_400_000,
+          );
     return {
-      totalMessages: 0,
-      messagesPerDay: 0,
-      averageMessageLength: 0,
+      totalMessages: stats.totalMessages,
+      messagesPerDay: stats.totalMessages / daysSinceFirst,
+      averageMessageLength: stats.averageMessageLength,
     };
   }
 

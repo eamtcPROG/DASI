@@ -55,8 +55,6 @@ services:
     depends_on:
       identity:
         condition: service_healthy
-      analytics:
-        condition: service_healthy
       rabbitmq:
         condition: service_healthy
       redis:
@@ -106,7 +104,7 @@ services:
       start_period: 25s
 
 
-  
+
   postgres-identity:
     image: postgres:16-alpine
     container_name: postgres-identity
@@ -117,7 +115,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: identity
-      PGDATA: /var/lib/postgresql/data/pgdata 
+      PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - postgres-identity-data:/var/lib/postgresql/data
     healthcheck:
@@ -128,61 +126,6 @@ services:
       start_period: 10s
     networks:
       - dasi-net
-  
-  analytics:
-    <<: *app-service
-    container_name: analytics-service
-    build:
-      context: ./analytics
-      dockerfile: Dockerfile
-    env_file:
-      - ./analytics/env/.env.production
-    ports:
-      - ${ANALYTICS_PORT:-3002}:3002
-    environment:
-      NODE_ENV: production
-    depends_on:
-      postgres-analytics:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "node",
-          "-e",
-          "require('http').get('http://127.0.0.1:3002/api',res=>process.exit(res.statusCode < 400 ? 0 : 1)).on('error',()=>process.exit(1))",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-      start_period: 25s
-
-
-
-  postgres-analytics:
-    image: postgres:16-alpine
-    container_name: postgres-analytics
-    restart: unless-stopped
-    ports:
-      - ${POSTGRES_ANALYTICS_PORT:-5433}:5432
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: analytics
-      PGDATA: /var/lib/postgresql/data/pgdata 
-    volumes:
-      - postgres-analytics-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-    networks:
-      - dasi-net
-
 
   chat:
     <<: *app-service
@@ -213,7 +156,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: chat
-      PGDATA: /var/lib/postgresql/data/pgdata 
+      PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - postgres-chat-data:/var/lib/postgresql/data
     healthcheck:
@@ -259,10 +202,68 @@ services:
     networks:
       - dasi-net
 
+  analytics:
+    <<: *app-service
+    container_name: analytics-service
+    image: dasi-analytics:latest
+    build:
+      context: .
+      dockerfile: analytics/Dockerfile
+    env_file:
+      - ./analytics/env/.env.production
+    ports:
+      - ${ANALYTICS_PORT:-3004}:3004
+    environment:
+      NODE_ENV: production
+      VERSION: "1.0.0"
+    depends_on:
+      mongo-analytics:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:3004/stats',res=>process.exit(res.statusCode === 200 ? 0 : 1)).on('error',()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    networks:
+      - dasi-net
+
+  mongo-analytics:
+    image: mongo:7
+    container_name: mongo-analytics
+    restart: unless-stopped
+    ports:
+      - ${MONGO_ANALYTICS_PORT:-27017}:27017
+    volumes:
+      - mongo-analytics-data:/data/db
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mongosh",
+          "--quiet",
+          "--eval",
+          "db.runCommand({ ping: 1 }).ok ? quit(0) : quit(1)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks:
+      - dasi-net
+
 volumes:
   postgres-identity-data:
-  postgres-analytics-data:
   postgres-chat-data:
+  mongo-analytics-data:
 networks:
   dasi-net:
     driver: bridge

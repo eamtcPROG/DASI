@@ -20,5 +20,6 @@ export default () => ({
   },
   rabbitmq: {
     url: process.env.RABBITMQ_URI,
+    analyticsQueue: process.env.RMQ_ANALYTICS_QUEUE ?? 'analytics',
   },
 });

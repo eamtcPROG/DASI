@@ -20,6 +20,7 @@ import type { AuthenticatedUser } from "../dto/user.dto";
 import { ResultObjectDto } from "../dto/resultobject.dto";
 import { ChatProxyService } from "../services/chat-proxy.service";
 import { AuthProxyService } from "../services/auth-proxy.service";
+import { AnalyticsEventsService } from "../services/analytics-events.service";
 import {
   RoomDto,
   UserRoomsRequestDto,
@@ -43,6 +44,7 @@ export class ChatController {
   constructor(
     private readonly chatProxyService: ChatProxyService,
     private readonly authProxyService: AuthProxyService,
+    private readonly analyticsEvents: AnalyticsEventsService,
   ) {}
 
   @HttpCode(200)
@@ -57,10 +59,16 @@ export class ChatController {
     @Body() body: CreateRoomRequestDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.chatProxyService.sendChatEvent("create_room", {
+    const result = await this.chatProxyService.sendChatEvent("create_room", {
       ...body,
       creatorId: user.id,
     });
+    if (!result?.error && result?.object) {
+      await this.analyticsEvents.publish("room.created", {
+        occurredAt: new Date().toISOString(),
+      });
+    }
+    return result;
   }
 
   @Get("rooms")

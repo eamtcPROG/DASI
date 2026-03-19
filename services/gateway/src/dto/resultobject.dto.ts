@@ -1,35 +1,35 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { MessageDto } from './message.dto';
+import { ApiProperty } from "@nestjs/swagger";
+import { MessageDto } from "./message.dto";
 
 export class ResultObjectDto<T> {
   @ApiProperty({
     example: false,
-    description: 'Error flag',
-    type: 'boolean',
+    description: "Error flag",
+    type: "boolean",
   })
   error: boolean;
 
   @ApiProperty({
     example: 200,
-    description: 'HTML code',
-    type: 'number',
+    description: "HTML code",
+    type: "number",
   })
   htmlcode: number;
 
   @ApiProperty({
     example: {},
-    description: 'Object',
-    type: 'object',
+    description: "Object",
+    type: "object",
     additionalProperties: false,
   })
   object: T | null;
 
   @ApiProperty({
     example: [],
-    description: 'Messages',
-    type: 'array',
+    description: "Messages",
+    type: "array",
     items: {
-      type: 'object',
+      type: "object",
     },
   })
   messages: MessageDto[];

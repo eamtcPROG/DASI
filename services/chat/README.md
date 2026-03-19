@@ -246,7 +246,7 @@ The chat service connects to RabbitMQ and consumes from the **`chat`** queue. Ot
 
 ## Response Format
 
-### Single object (e.g. analytics endpoints)
+### Single object (e.g. stats or room payload)
 
 ```json
 {

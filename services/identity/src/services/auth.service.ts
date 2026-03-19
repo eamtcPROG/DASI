@@ -1,8 +1,10 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ClientProxy } from '@nestjs/microservices';
 import { CreateUserDto } from '../dto/create-user.dto';
 import { UserService } from './user.service';
 import { hash, genSalt, compare } from 'bcrypt';
@@ -17,6 +19,7 @@ export class AuthService {
   constructor(
     private readonly service: UserService,
     private jwtService: JwtService,
+    @Inject('ANALYTICS_SERVICE') private readonly analyticsClient: ClientProxy,
   ) {}
 
   async hashPassword(password: string): Promise<string> {
@@ -40,6 +43,11 @@ export class AuthService {
       ...object,
       password: hashedPassword,
     });
+
+    this.analyticsClient.emit('analytics.event', {
+      event: 'user.created',
+      data: { userId: user.id, email: user.email, createdAt: new Date().toISOString() },
+    }).subscribe();
 
     const result = UserDto.fromEntity(user);
     return await this.signToken(result);

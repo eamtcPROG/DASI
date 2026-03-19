@@ -1,22 +1,22 @@
 # DASI
 
-DASI is a multi-service platform composed of a Next.js client, a NestJS gateway, and two NestJS domain services for identity and analytics. The gateway is the main backend entry point, while identity and analytics also expose their own direct HTTP APIs and RabbitMQ microservice handlers for internal communication.
+DASI is a multi-service platform composed of a Next.js client, a NestJS gateway, and NestJS domain services for identity and chat. The gateway is the main backend entry point, while identity and chat expose their own direct HTTP APIs and RabbitMQ microservice handlers for internal communication.
 
 ## Architecture overview
 
 - `services/client`: Next.js 16 frontend with public auth pages and a protected chat page.
-- `services/gateway`: NestJS 11 API gateway that exposes `/auth/*`, `/analytics/*`, and `/health`.
+- `services/gateway`: NestJS 11 API gateway that exposes `/auth/*`, `/health`, and chat/realtime integration.
 - `services/identity`: NestJS 11 auth and user service with PostgreSQL persistence and JWT handling.
-- `services/analytics`: NestJS 11 analytics service with PostgreSQL wiring and placeholder analytics responses.
-- Shared infrastructure: RabbitMQ plus separate PostgreSQL instances for identity and analytics.
+- `services/chat`: NestJS 11 chat service with PostgreSQL and RabbitMQ.
+- Shared infrastructure: RabbitMQ plus separate PostgreSQL instances for identity and chat.
 
 Primary request flow:
 
 1. The browser loads the Next.js client.
 2. The client calls Next route handlers and server helpers.
 3. Those helpers call the gateway over HTTP.
-4. The gateway proxies requests to identity or analytics over RabbitMQ RPC.
-5. Identity and analytics use their own databases and return the result to the gateway.
+4. The gateway proxies requests to identity or chat over RabbitMQ RPC.
+5. Identity and chat use their own databases and return the result to the gateway.
 
 See `docs/architecture.md` for the full architecture guide, request flows, and topology diagrams.
 
@@ -27,7 +27,7 @@ See `docs/architecture.md` for the full architecture guide, request flows, and t
 | `services/client` | Next.js 16, React 19 | `3100` in local dev recommended | UI, auth forms, protected pages, gateway integration | `docs/architecture.md` |
 | `services/gateway` | NestJS 11 | `3000` | Public API, JWT enforcement, RMQ proxying, health checks | `docs/architecture.md` |
 | `services/identity` | NestJS 11, TypeORM, PostgreSQL | `3001` | Users, sign-up, sign-in, refresh, token validation | `services/identity/README.md` |
-| `services/analytics` | NestJS 11, TypeORM, PostgreSQL | `3002` | Analytics endpoints and RMQ handlers | `services/analytics/README.md` |
+| `services/chat` | NestJS 11, TypeORM, PostgreSQL | `3003` | Chat rooms, messages, RMQ handlers | `services/chat/README.md` |
 
 ## Repository layout
 
@@ -36,10 +36,10 @@ See `docs/architecture.md` for the full architecture guide, request flows, and t
 ├── docs/
 │   └── architecture.md
 ├── services/
-│   ├── analytics/
 │   ├── client/
 │   ├── gateway/
 │   ├── identity/
+│   ├── chat/
 │   ├── docker-compose.dev.yaml
 │   ├── docker-compose.test.yaml
 │   └── docker-compose.yaml
@@ -66,7 +66,6 @@ docker compose -f docker-compose.dev.yaml up -d
 This starts:
 
 - `postgres-identity` on `localhost:5432`
-- `postgres-analytics` on `localhost:5433`
 - `rabbitmq` on `localhost:5672`
 
 ### 2. Install dependencies
@@ -75,7 +74,7 @@ Install dependencies in each service directory:
 
 ```bash
 cd services/identity && npm install
-cd services/analytics && npm install
+cd services/chat && npm install
 cd services/gateway && npm install
 cd services/client && pnpm install
 ```
@@ -86,7 +85,7 @@ Run each NestJS service in a separate terminal:
 
 ```bash
 cd services/identity && npm run start:dev
-cd services/analytics && npm run start:dev
+cd services/chat && npm run start:dev
 cd services/gateway && npm run start:dev
 ```
 
@@ -107,8 +106,8 @@ cd services/client && npx next dev --port 3100
 | `http://127.0.0.1:3000/api` | Gateway Swagger |
 | `http://127.0.0.1:3001` | Identity service |
 | `http://127.0.0.1:3001/api` | Identity Swagger |
-| `http://127.0.0.1:3002` | Analytics service |
-| `http://127.0.0.1:3002/api` | Analytics Swagger |
+| `http://127.0.0.1:3003` | Chat service |
+| `http://127.0.0.1:3003/api` | Chat Swagger |
 
 ## Public API surface
 
@@ -120,9 +119,6 @@ The gateway is the intended backend entry point for the client and external cons
 - `POST /auth/sign-in`
 - `GET /auth/refresh`
 - `GET /auth/users?page=&onPage=`
-- `GET /analytics/messages`
-- `GET /analytics/users`
-- `GET /analytics/general`
 - `GET /health`
 
 ### Important routing note
@@ -166,20 +162,19 @@ This starts:
 - `client` on `localhost:3100`
 - `gateway` on `localhost:3000`
 - `identity` on `localhost:3001`
-- `analytics` on `localhost:3002`
+- `chat` on `localhost:3003`
 - `postgres-identity` on `localhost:5432`
-- `postgres-analytics` on `localhost:5433`
+- `postgres-chat` on `localhost:5434`
 - `rabbitmq` on `localhost:5672`
 - `redis` on `localhost:6379`
 
 ## Testing notes
 
 - Backend e2e tests require the test stack from `services/docker-compose.test.yaml`.
-- The analytics service currently has placeholder analytics responses and may not yet have meaningful unit coverage.
 - The gateway includes realtime health metadata, but the realtime module currently reports `enabled: false`.
 
 ## Additional documentation
 
 - Platform architecture: `docs/architecture.md`
 - Identity service: `services/identity/README.md`
-- Analytics service: `services/analytics/README.md`
+- Chat service: `services/chat/README.md`
