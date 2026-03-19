@@ -1,13 +1,13 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import configuration from './config/configuration';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { APP_INTERCEPTOR } from '@nestjs/core';
-import { GlobalErrorsInterceptor } from './interceptors/global-errors.interceptor';
-import { GlobalResponseInterceptor } from './interceptors/global-response.interceptor';
 import { AnalyticsService } from './services/analytics.service';
 import { AnalyticsController } from './controllers/analytics.controller';
 import { AnalyticsEventController } from './events/analytics.event.controller';
+import { MongooseModule } from '@nestjs/mongoose';
+import { AnalyticsSnapshot, AnalyticsSnapshotSchema } from './schemas/analytics-snapshot.schema';
+import { ConfigService } from '@nestjs/config';
+import { AnalyticsEvent, AnalyticsEventSchema } from './schemas/analytics-event.schema';
 
 @Module({
   imports: [
@@ -16,34 +16,18 @@ import { AnalyticsEventController } from './events/analytics.event.controller';
       envFilePath: `${process.cwd()}/env/.env.${process.env.NODE_ENV}`,
       load: [configuration],
     }),
-    TypeOrmModule.forRootAsync({
+    MongooseModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => {
-        return {
-          type: 'postgres',
-          host: config.get<string>('database.host'),
-          port: config.get<number>('database.port'),
-          username: config.get<string>('database.username'),
-          password: config.get<string>('database.password'),
-          database: config.get<string>('database.database'),
-          synchronize: true,
-          entities: [],
-        };
-      },
+      useFactory: (config: ConfigService) => ({
+        uri: config.get<string>('mongodb.uri'),
+      }),
     }),
+    MongooseModule.forFeature([
+      { name: AnalyticsSnapshot.name, schema: AnalyticsSnapshotSchema },
+      { name: AnalyticsEvent.name, schema: AnalyticsEventSchema },
+    ]),
   ],
   controllers: [AnalyticsController, AnalyticsEventController],
-  providers: [
-    AnalyticsService,
-    {
-      provide: APP_INTERCEPTOR,
-      useClass: GlobalErrorsInterceptor,
-    },
-    {
-      provide: APP_INTERCEPTOR,
-      useClass: GlobalResponseInterceptor,
-    },
-  ],
+  providers: [AnalyticsService],
 })
 export class AppModule {}
-

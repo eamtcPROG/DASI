@@ -8,8 +8,11 @@ export default () => ({
   rabbitmq: {
     url: process.env.RABBITMQ_URI,
     identityQueue: process.env.RMQ_IDENTITY_QUEUE ?? "user",
-    analyticsQueue: process.env.RMQ_ANALYTICS_QUEUE ?? "analytics",
     chatQueue: process.env.RMQ_CHAT_QUEUE ?? "chat",
+    analyticsQueue: process.env.RMQ_ANALYTICS_QUEUE ?? "analytics",
+  },
+  analytics: {
+    baseUrl: process.env.ANALYTICS_HTTP_URL ?? "http://localhost:3004",
   },
   redis: {
     host: process.env.REDIS_HOST,

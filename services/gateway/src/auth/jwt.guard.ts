@@ -3,11 +3,11 @@ import {
   ExecutionContext,
   Injectable,
   UnauthorizedException,
-} from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
-import { AuthProxyService } from '../services/auth-proxy.service';
-import { AuthenticatedUser } from '../dto/user.dto';
-import { getJwtFromRequest } from '../tools/common.tools';
+} from "@nestjs/common";
+import { Reflector } from "@nestjs/core";
+import { AuthProxyService } from "../services/auth-proxy.service";
+import { AuthenticatedUser } from "../dto/user.dto";
+import { getJwtFromRequest } from "../tools/common.tools";
 
 @Injectable()
 export class JwtGuard implements CanActivate {
@@ -17,7 +17,7 @@ export class JwtGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const isPublic = this.reflector.getAllAndOverride<boolean>('isPublic', [
+    const isPublic = this.reflector.getAllAndOverride<boolean>("isPublic", [
       context.getHandler(),
       context.getClass(),
     ]);
@@ -28,12 +28,14 @@ export class JwtGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<Express.Request>();
     const token = getJwtFromRequest(request);
     if (!token) {
-      throw new UnauthorizedException('Invalid or missing token');
+      throw new UnauthorizedException("Invalid or missing token");
     }
 
     const result = await this.authProxyService.validateToken(token);
     if (!result.isValid || !result.user) {
-      throw new UnauthorizedException(result.error ?? 'Invalid or missing token');
+      throw new UnauthorizedException(
+        result.error ?? "Invalid or missing token",
+      );
     }
 
     request.user = {

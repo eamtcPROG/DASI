@@ -2,7 +2,8 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { BellDot, LogOut, MessageCircle, Plus, Search, ShieldCheck, Users } from "lucide-react"
+import Link from "next/link"
+import { BarChart3, BellDot, LogOut, MessageCircle, Plus, Search, ShieldCheck } from "lucide-react"
 
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { Button } from "@/components/ui/button"
@@ -59,6 +60,13 @@ export function SidebarHeader({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            href="/analytics"
+            className="inline-flex items-center justify-center rounded-xl border border-border/70 bg-background/80 p-2 text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+            aria-label="Analytics"
+          >
+            <BarChart3 className="size-4" />
+          </Link>
           <ThemeToggle className="rounded-xl border-border/70 bg-background/80" />
           <Button
             variant="outline"

@@ -12,6 +12,7 @@ import { DefaultEventsMap, Server, Socket } from "socket.io";
 import { RealtimeService } from "./realtime.service";
 import { AuthProxyService } from "../services/auth-proxy.service";
 import { ChatProxyService } from "../services/chat-proxy.service";
+import { AnalyticsEventsService } from "../services/analytics-events.service";
 import { UserDto } from "../dto/user.dto";
 
 const DEFAULT_SOCKET_CORS_ORIGINS = [
@@ -65,6 +66,7 @@ export class RealtimeGateway
     private readonly realtimeService: RealtimeService,
     private readonly authProxyService: AuthProxyService,
     private readonly chatProxyService: ChatProxyService,
+    private readonly analyticsEvents: AnalyticsEventsService,
     private readonly configService: ConfigService,
   ) {
     this.identityServiceUrl =
@@ -289,6 +291,17 @@ export class RealtimeGateway
         const messageData = response.object as SendMessageResult;
         const savedMessage = messageData.message;
         if (savedMessage) {
+          await this.analyticsEvents.publish("message.created", {
+            messageId:
+              typeof (savedMessage as any).id === "number"
+                ? (savedMessage as any).id
+                : undefined,
+            userId: savedMessage.user_id,
+            roomId: payload.roomId,
+            // Use gateway receive time to avoid DB timezone skew in short windows.
+            occurredAt: new Date().toISOString(),
+          });
+
           // Fetch user info for the message sender
           const user =
             (await this.fetchIdentityUser(savedMessage.user_id, token)) ??
@@ -380,6 +393,10 @@ export class RealtimeGateway
 
       // Send room_created event back to creator
       if (response && response.object) {
+        await this.analyticsEvents.publish("room.created", {
+          occurredAt: new Date().toISOString(),
+        });
+
         client.emit("chat:room_created", {
           room: response.object,
           creatorId: sender.id,

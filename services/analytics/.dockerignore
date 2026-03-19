@@ -3,15 +3,8 @@ dist
 .git
 .gitignore
 .env*
-!.env.example
 *.md
-coverage
-.nyc_output
 *.log
 npm-debug.log*
 test
 *.spec.ts
-.eslintrc*
-.prettierrc*
-
-

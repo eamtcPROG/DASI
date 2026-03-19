@@ -1,44 +1,46 @@
-import { Controller } from "@nestjs/common";
-import {
-  MessagePattern,
-  Payload,
-  Ctx,
-  RmqContext,
-} from "@nestjs/microservices";
-import { AnalyticsService } from "../services/analytics.service";
-import { ResultObjectDto } from "../dto/resultobject.dto";
+import { Controller } from '@nestjs/common';
+import { Ctx, MessagePattern, Payload, RmqContext } from '@nestjs/microservices';
+import { AnalyticsService } from '../services/analytics.service';
+
+type AnalyticsEventPayload = {
+  event: 'user.created' | 'message.created' | 'room.created';
+  data?: Record<string, unknown>;
+};
+
+type RmqChannel = { ack: (msg: unknown) => void };
 
 @Controller()
 export class AnalyticsEventController {
   constructor(private readonly analyticsService: AnalyticsService) {}
 
-  @MessagePattern("get_analytics")
-  async handleGetAnalytics(
-    @Payload() data: { type: "messages" | "users" | "general" },
+  @MessagePattern('analytics.event')
+  async handleEvent(
+    @Payload() payload: AnalyticsEventPayload,
     @Ctx() context: RmqContext,
-  ): Promise<ResultObjectDto<unknown>> {
-    const channel = context.getChannelRef();
-    const originalMsg = context.getMessage();
+  ): Promise<void> {
+    const channel = context.getChannelRef() as RmqChannel;
+    const message = context.getMessage();
 
-    let analytics: unknown;
+    try {
+      const occurredAt =
+        typeof payload.data?.occurredAt === 'string'
+          ? payload.data.occurredAt
+          : typeof payload.data?.createdAt === 'string'
+            ? payload.data.createdAt
+          : undefined;
 
-    switch (data.type) {
-      case "messages":
-        analytics = await this.analyticsService.getMessageAnalytics();
-        break;
-      case "users":
-        analytics = await this.analyticsService.getUserAnalytics();
-        break;
-      case "general":
-        analytics = await this.analyticsService.getGeneralAnalytics();
-        break;
-      default:
-        return new ResultObjectDto(null, true, 400, [
-          { type: 2, message: "Invalid analytics type" },
-        ]);
+      if (payload.event === 'user.created') {
+        await this.analyticsService.recordEvent('user.created', occurredAt);
+        await this.analyticsService.incrementUsers();
+      } else if (payload.event === 'message.created') {
+        await this.analyticsService.recordEvent('message.created', occurredAt);
+        await this.analyticsService.incrementMessages();
+      } else if (payload.event === 'room.created') {
+        await this.analyticsService.recordEvent('room.created', occurredAt);
+        await this.analyticsService.incrementChats();
+      }
+    } finally {
+      channel.ack(message);
     }
-
-    channel.ack(originalMsg);
-    return new ResultObjectDto(analytics, false, 200);
   }
 }

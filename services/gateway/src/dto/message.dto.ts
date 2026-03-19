@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty } from "@nestjs/swagger";
 
 export enum MessageType {
   SUCCESS = 1,
@@ -9,15 +9,15 @@ export enum MessageType {
 export class MessageDto {
   @ApiProperty({
     example: 1,
-    description: 'The type of the message',
-    type: 'number',
+    description: "The type of the message",
+    type: "number",
   })
   type: number;
 
   @ApiProperty({
-    example: 'Hello World',
-    description: 'The message to be displayed',
-    type: 'string',
+    example: "Hello World",
+    description: "The message to be displayed",
+    type: "string",
   })
   message: string;
 

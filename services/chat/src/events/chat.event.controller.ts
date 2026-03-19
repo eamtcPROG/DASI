@@ -10,7 +10,15 @@ import { ResultObjectDto } from "../dto/resultobject.dto";
 import { ChatGateway } from "../websocket/chat.gateway";
 
 type GetChatPayload = {
-  type: "messages" | "users" | "general" | "rooms" | "leave" | "members";
+  type:
+    | "messages"
+    | "users"
+    | "general"
+    | "rooms"
+    | "leave"
+    | "members"
+    | "stats"
+    | "message_times";
   payload?: {
     roomId?: number;
     userId?: number;
@@ -100,6 +108,12 @@ export class ChatEventController {
           chat = await this.chatService.getRoomMembers(roomId);
           break;
         }
+        case "stats":
+          chat = await this.chatService.getStats();
+          break;
+        case "message_times":
+          chat = await this.chatService.getMessageTimes();
+          break;
         case "leave":
           try {
             const userId = data.payload?.userId;

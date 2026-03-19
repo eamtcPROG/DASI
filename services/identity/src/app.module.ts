@@ -3,6 +3,7 @@ import configuration from './config/configuration';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { APP_INTERCEPTOR } from '@nestjs/core';
+import { ClientsModule, Transport } from '@nestjs/microservices';
 import { GlobalErrorsInterceptor } from './interceptors/global-errors.interceptor';
 import { GlobalResponseInterceptor } from './interceptors/global-response.interceptor';
 import { AuthService } from './services/auth.service';
@@ -13,6 +14,12 @@ import { User } from './models/user.model';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthEventController } from './events/auth.event.controller';
 import { IdentityEventController } from './events/identity.event.controller';
+
+function getRequiredConfig(config: ConfigService, key: string): string {
+  const value = config.get<string>(key);
+  if (!value) throw new Error(`${key} is not configured`);
+  return value;
+}
 
 @Module({
   imports: [
@@ -37,6 +44,21 @@ import { IdentityEventController } from './events/identity.event.controller';
       },
     }),
     TypeOrmModule.forFeature([User]),
+    ClientsModule.registerAsync([
+      {
+        name: 'ANALYTICS_SERVICE',
+        imports: [ConfigModule],
+        inject: [ConfigService],
+        useFactory: (config: ConfigService) => ({
+          transport: Transport.RMQ,
+          options: {
+            urls: [getRequiredConfig(config, 'rabbitmq.url')],
+            queue: config.get<string>('rabbitmq.analyticsQueue') ?? 'analytics',
+            queueOptions: { durable: true },
+          },
+        }),
+      },
+    ]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (config: ConfigService) => ({

@@ -1,27 +1,25 @@
-# Build stage
-FROM node:22-alpine AS builder
+# Build context must be services/ (compose file dir). All COPY from analytics/ so we never pull another service.
+FROM node:alpine AS builder
 
 WORKDIR /app
 
-COPY package.json package-lock.json* ./
+COPY analytics/package.json analytics/package-lock.json* ./
 RUN npm ci
 
-COPY . .
+COPY analytics/src ./src
+COPY analytics/tsconfig.json analytics/tsconfig.build.json analytics/nest-cli.json ./
+RUN grep -rq "TypeOrmModule\|typeorm" src/ 2>/dev/null && (echo "FATAL: TypeORM in analytics source" && exit 1) || true
 RUN npm run build
 
-# Production stage
-FROM node:22-alpine AS production
+FROM node:alpine AS production
 
 ENV NODE_ENV=production
 
 WORKDIR /app
 
-COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev && npm cache clean --force
+COPY analytics/package.json analytics/package-lock.json* ./
+RUN npm ci --omit=dev
 
 COPY --from=builder /app/dist ./dist
 
-EXPOSE 3002
-
-CMD ["npm", "run", "start:prod"]
-
+CMD ["node", "dist/main.js"]
