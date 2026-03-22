@@ -1,7 +1,6 @@
 "use client"
 
 import { type FormEvent, useState } from "react"
-import { useRouter } from "next/navigation"
 import { ArrowRight, Eye, EyeOff } from "lucide-react"
 import { toast } from "sonner"
 
@@ -21,7 +20,6 @@ import {
 } from "@/lib/auth"
 
 export function SignUpForm() {
-  const router = useRouter()
   const [firstName, setFirstName] = useState("")
   const [lastName, setLastName] = useState("")
   const [email, setEmail] = useState("")
@@ -61,8 +59,7 @@ export function SignUpForm() {
       }
 
       toast.success("Account created successfully.")
-      router.replace("/chat")
-      router.refresh()
+      window.location.replace("/chat")
     } catch {
       const message = "Unable to reach the server. Please try again."
       setError(message)

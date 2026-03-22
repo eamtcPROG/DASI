@@ -4,10 +4,10 @@ import {
   ArgumentsHost,
   HttpException,
   HttpStatus,
-} from '@nestjs/common';
-import { Response } from 'express';
-import { ResultObjectDto } from '../dto/resultobject.dto';
-import { MessageDto, MessageType } from '../dto/message.dto';
+} from "@nestjs/common";
+import { Response } from "express";
+import { ResultObjectDto } from "../dto/resultobject.dto";
+import { MessageDto, MessageType } from "../dto/message.dto";
 
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
@@ -16,25 +16,25 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
-    let messages: MessageDto[] = [];
+    let messages: MessageDto[];
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
       const res = exception.getResponse();
-      if (typeof res === 'string') {
+      if (typeof res === "string") {
         messages = [new MessageDto(res, MessageType.ERROR)];
-      } else if (typeof res === 'object' && res !== null) {
+      } else if (typeof res === "object" && res !== null) {
         const payload = res as Record<string, unknown>;
         const extracted =
-          payload['message'] ?? payload['error'] ?? exception.message;
+          payload["message"] ?? payload["error"] ?? exception.message;
         if (Array.isArray(extracted)) {
           messages = extracted.map(
             (m) => new MessageDto(String(m), MessageType.ERROR),
           );
-        } else if (typeof extracted === 'string') {
+        } else if (typeof extracted === "string") {
           messages = [new MessageDto(extracted, MessageType.ERROR)];
         } else {
-          messages = [new MessageDto('Unexpected error', MessageType.ERROR)];
+          messages = [new MessageDto("Unexpected error", MessageType.ERROR)];
         }
       } else {
         messages = [new MessageDto(exception.message, MessageType.ERROR)];
@@ -42,7 +42,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     } else if (exception instanceof Error) {
       messages = [new MessageDto(exception.message, MessageType.ERROR)];
     } else {
-      messages = [new MessageDto('Internal server error', MessageType.ERROR)];
+      messages = [new MessageDto("Internal server error", MessageType.ERROR)];
     }
 
     const result = new ResultObjectDto<unknown>(null, true, status, messages);

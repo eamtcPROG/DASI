@@ -41,7 +41,8 @@ RUN corepack enable
 WORKDIR /app
 
 COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --prod --frozen-lockfile && pnpm store prune
+COPY --from=deps /app/node_modules ./node_modules
+RUN pnpm prune --prod
 
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public

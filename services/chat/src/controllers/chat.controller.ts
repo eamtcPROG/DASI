@@ -2,14 +2,19 @@ import { Controller, Post, Body, HttpCode } from "@nestjs/common";
 import { ApiOkResponse, ApiOperation, ApiTags, ApiBody } from "@nestjs/swagger";
 import { ChatService } from "../services/chat.service";
 import { ResultObjectDto } from "../dto/resultobject.dto";
-import { RoomDto, UserRoomsRequestDto, LeaveRoomRequestDto, CreateRoomRequestDto, CreateRoomResponseDto } from "../dto/chat.dto";
+import {
+  RoomDto,
+  UserRoomsRequestDto,
+  LeaveRoomRequestDto,
+  CreateRoomRequestDto,
+  CreateRoomResponseDto,
+} from "../dto/chat.dto";
 
 @ApiTags("Chat")
 @Controller("chat")
 export class ChatController {
   constructor(private readonly chatService: ChatService) {}
 
-  
   @HttpCode(200)
   @Post("join")
   @ApiOperation({ summary: "Create room and add members" })
@@ -23,7 +28,14 @@ export class ChatController {
       const room = await this.chatService.createRoom(body);
       return { error: false, htmlcode: 200, object: room, messages: [] };
     } catch (error) {
-      return { error: true, htmlcode: 500, object: null, messages: [{ type: 2, message: error.message }] };
+      const message =
+        error instanceof Error ? error.message : "Unexpected error";
+      return {
+        error: true,
+        htmlcode: 500,
+        object: null,
+        messages: [{ type: 2, message }],
+      };
     }
   }
 
@@ -40,17 +52,24 @@ export class ChatController {
       const rooms = await this.chatService.getUserRooms(body.userId);
       return { error: false, htmlcode: 200, object: rooms, messages: [] };
     } catch (error) {
-      return { error: true, htmlcode: 500, object: null, messages: [{ type: 2, message: error.message }] };
+      const message =
+        error instanceof Error ? error.message : "Unexpected error";
+      return {
+        error: true,
+        htmlcode: 500,
+        object: null,
+        messages: [{ type: 2, message }],
+      };
     }
   }
 
   @HttpCode(200)
   @Post("members")
-  @ApiOperation({ summary: 'Get room members' })
-  @ApiBody({ description: 'Room ID request' })
+  @ApiOperation({ summary: "Get room members" })
+  @ApiBody({ description: "Room ID request" })
   @ApiOkResponse({
     type: ResultObjectDto<any[]>,
-    description: 'Room members response',
+    description: "Room members response",
   })
   async getRoomMembers(@Body() body: { roomId: number }) {
     return this.chatService.getRoomMembers(body.roomId);
@@ -69,7 +88,14 @@ export class ChatController {
       await this.chatService.leaveRoom(body.userId, body.roomId);
       return { error: false, htmlcode: 200, object: null, messages: [] };
     } catch (error) {
-      return { error: true, htmlcode: 400, object: null, messages: [{ type: 2, message: error.message }] };
+      const message =
+        error instanceof Error ? error.message : "Unexpected error";
+      return {
+        error: true,
+        htmlcode: 400,
+        object: null,
+        messages: [{ type: 2, message }],
+      };
     }
   }
 }

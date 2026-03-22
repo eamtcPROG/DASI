@@ -1,7 +1,6 @@
 "use client"
 
 import { type FormEvent, useState } from "react"
-import { useRouter } from "next/navigation"
 import { ArrowRight, Eye, EyeOff } from "lucide-react"
 import { toast } from "sonner"
 
@@ -21,7 +20,6 @@ import {
 } from "@/lib/auth"
 
 export function SignInForm() {
-  const router = useRouter()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
@@ -57,8 +55,7 @@ export function SignInForm() {
       }
 
       toast.success("Signed in successfully.")
-      router.replace("/chat")
-      router.refresh()
+      window.location.replace("/chat")
     } catch {
       const message = "Unable to reach the server. Please try again."
       setError(message)
