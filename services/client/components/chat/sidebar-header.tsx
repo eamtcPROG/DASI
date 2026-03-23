@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { BarChart3, BellDot, LogOut, MessageCircle, Plus, Search, ShieldCheck } from "lucide-react"
 
@@ -31,7 +30,6 @@ export function SidebarHeader({
   conversationCount,
   onCreateGroup,
 }: SidebarHeaderProps) {
-  const router = useRouter()
   const [isSigningOut, setIsSigningOut] = useState(false)
 
   const handleSignOut = async () => {
@@ -42,8 +40,7 @@ export function SidebarHeader({
         method: "POST",
       })
     } finally {
-      router.replace("/signin")
-      router.refresh()
+      window.location.replace("/signin")
     }
   }
 
