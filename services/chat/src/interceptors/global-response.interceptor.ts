@@ -3,40 +3,40 @@ import {
   ExecutionContext,
   Injectable,
   NestInterceptor,
-} from '@nestjs/common';
-import { Response } from 'express';
-import { map } from 'rxjs/operators';
-import { ResultObjectDto } from '../dto/resultobject.dto';
-import { ResultListDto } from '../dto/resultlist.dto';
+} from "@nestjs/common";
+import { Response } from "express";
+import { map } from "rxjs/operators";
+import { ResultObjectDto } from "../dto/resultobject.dto";
+import { ResultListDto } from "../dto/resultlist.dto";
 
 function isAlreadyWrapped(data: unknown): boolean {
-  if (!data || typeof data !== 'object') return false;
+  if (!data || typeof data !== "object") return false;
   const payload = data as Record<string, unknown>;
   const hasCommon: unknown =
-    Object.prototype.hasOwnProperty.call(payload, 'error') &&
-    Object.prototype.hasOwnProperty.call(payload, 'htmlcode') &&
-    Object.prototype.hasOwnProperty.call(payload, 'messages');
+    Object.prototype.hasOwnProperty.call(payload, "error") &&
+    Object.prototype.hasOwnProperty.call(payload, "htmlcode") &&
+    Object.prototype.hasOwnProperty.call(payload, "messages");
   if (!hasCommon) return false;
-  return (Object.prototype.hasOwnProperty.call(payload, 'object') ||
-    Object.prototype.hasOwnProperty.call(payload, 'objects')) as boolean;
+  return (Object.prototype.hasOwnProperty.call(payload, "object") ||
+    Object.prototype.hasOwnProperty.call(payload, "objects")) as boolean;
 }
 
 function extractListEnvelope(
   data: unknown,
 ): { objects: unknown[]; total: number; totalpages: number } | null {
-  if (!data || typeof data !== 'object') return null;
+  if (!data || typeof data !== "object") return null;
   const payload = data as Record<string, unknown>;
-  const rawObjects = Array.isArray(payload['objects'])
-    ? (payload['objects'] as unknown[])
-    : Array.isArray(payload['items'])
-      ? (payload['items'] as unknown[])
+  const rawObjects = Array.isArray(payload["objects"])
+    ? (payload["objects"] as unknown[])
+    : Array.isArray(payload["items"])
+      ? (payload["items"] as unknown[])
       : null;
-  const totalVal = payload['total'];
-  const totalPagesVal = payload['totalpages'];
+  const totalVal = payload["total"];
+  const totalPagesVal = payload["totalpages"];
   if (
     rawObjects &&
-    typeof totalVal === 'number' &&
-    typeof totalPagesVal === 'number'
+    typeof totalVal === "number" &&
+    typeof totalPagesVal === "number"
   ) {
     return {
       objects: rawObjects,

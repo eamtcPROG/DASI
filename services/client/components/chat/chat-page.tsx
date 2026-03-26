@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { MessageCircleMore, SearchX } from "lucide-react"
+import { MessageCircleMore, MessageSquarePlus, SearchX, User } from "lucide-react"
 
 import { SidebarHeader } from "@/components/chat/sidebar-header"
 import { ChatList } from "@/components/chat/chat-list"
@@ -17,7 +17,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 import { type UserDto, getUserDisplayName } from "@/lib/auth"
-import { getSocket, disconnectSocket, getSocketStatus } from "@/lib/socket"
+import { getSocket, disconnectSocket } from "@/lib/socket"
 import { cn } from "@/lib/utils"
 
 type Message = {
@@ -26,6 +26,9 @@ type Message = {
   time: string
   sent: boolean
   read: boolean
+  isEdited?: boolean
+  senderName?: string
+  senderId?: number
 }
 
 type Chat = {
@@ -39,13 +42,6 @@ type Chat = {
   pinned: boolean
 }
 
-type IncomingMessage = {
-  id: string
-  senderId: number
-  senderEmail: string
-  content: string
-  timestamp: string
-}
 
 type ChatPageProps = {
   user: UserDto
@@ -59,6 +55,7 @@ export function ChatPage({ user, token }: ChatPageProps) {
   const [search, setSearch] = useState("")
   const [typingUsers, setTypingUsers] = useState<Set<number>>(new Set())
   const [showMembersModal, setShowMembersModal] = useState(false)
+  const [allUsers, setAllUsers] = useState<UserDto[]>([])
   const typingTimeouts = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map())
 
   useEffect(() => {
@@ -93,6 +90,21 @@ export function ChatPage({ user, token }: ChatPageProps) {
     }
 
     loadUserRooms()
+  }, [user.id])
+
+  // Fetch all users for people search
+  useEffect(() => {
+    const loadUsers = async () => {
+      try {
+        const response = await fetch("/api/auth/users?onPage=200")
+        const data = await response.json()
+        const users: UserDto[] = data?.objects ?? []
+        setAllUsers(users.filter((u) => u.id !== user.id))
+      } catch {
+        // silently ignore
+      }
+    }
+    loadUsers()
   }, [user.id])
 
   // Auto-load room history when selected chat changes
@@ -204,10 +216,10 @@ export function ChatPage({ user, token }: ChatPageProps) {
     })
 
     socket.on("chat:room_invitation", (data) => {
-      const { room, invitedBy } = data
+      const { room, inviterName } = data
       const newRoom = {
         id: String(room.id),
-        name: room.name,
+        name: inviterName ?? room.name,
         lastMessage: "",
         time: new Date().toLocaleTimeString(),
         unread: 1,
@@ -228,6 +240,28 @@ export function ChatPage({ user, token }: ChatPageProps) {
           return [newRoom, ...prev]
         }
       })
+    })
+
+    socket.on("chat:message_edited", (data) => {
+      const { roomId, message } = data
+      const chatId = String(roomId)
+      setMessages((prev) => ({
+        ...prev,
+        [chatId]: (prev[chatId] ?? []).map((m) =>
+          m.id === String(message.id)
+            ? { ...m, content: message.content, isEdited: true }
+            : m,
+        ),
+      }))
+    })
+
+    socket.on("chat:message_deleted", (data) => {
+      const { roomId, messageId } = data
+      const chatId = String(roomId)
+      setMessages((prev) => ({
+        ...prev,
+        [chatId]: (prev[chatId] ?? []).filter((m) => m.id !== String(messageId)),
+      }))
     })
 
     socket.on("chat:typing", ({ senderId, isTyping }: { senderId: number; isTyping: boolean }) => {
@@ -269,6 +303,8 @@ export function ChatPage({ user, token }: ChatPageProps) {
       socket.off("chat:room_created")
       socket.off("chat:room_invitation")
       socket.off("chat:typing")
+      socket.off("chat:message_edited")
+      socket.off("chat:message_deleted")
       disconnectSocket()
     }
   }, [token, user.id])
@@ -285,10 +321,19 @@ export function ChatPage({ user, token }: ChatPageProps) {
     )
   }, [chats, search])
 
+  const filteredPeople = useMemo(() => {
+    const query = search.trim().toLowerCase()
+    if (!query) return []
+    return allUsers.filter((u) => {
+      const name = getUserDisplayName(u).toLowerCase()
+      return name.includes(query) || u.email.toLowerCase().includes(query)
+    })
+  }, [search, allUsers])
+
   const pinnedChats = search ? [] : filteredChats.filter((chat) => chat.pinned)
   const recentChats = search ? filteredChats : filteredChats.filter((chat) => !chat.pinned)
   const selectedChatData = chats.find((chat) => chat.id === selectedChat)
-  const hasSearchResults = filteredChats.length > 0
+  const hasSearchResults = filteredChats.length > 0 || filteredPeople.length > 0
 
   const handleLeaveRoom = async () => {
     if (!selectedChat) return
@@ -347,6 +392,48 @@ export function ChatPage({ user, token }: ChatPageProps) {
       roomId,
       userId: user.id,
       content
+    })
+  }
+
+  const handleEditMessage = (messageId: string, newContent: string) => {
+    if (!selectedChat) return
+    const socket = getSocket(token)
+    socket.emit("chat:edit_message", {
+      messageId: Number(messageId),
+      roomId: Number(selectedChat),
+      content: newContent,
+    })
+    // Optimistic update
+    setMessages((prev) => ({
+      ...prev,
+      [selectedChat]: (prev[selectedChat] ?? []).map((m) =>
+        m.id === messageId ? { ...m, content: newContent, isEdited: true } : m,
+      ),
+    }))
+  }
+
+  const handleDeleteMessage = (messageId: string) => {
+    if (!selectedChat) return
+    const socket = getSocket(token)
+    socket.emit("chat:delete_message", {
+      messageId: Number(messageId),
+      roomId: Number(selectedChat),
+    })
+    // Optimistic update
+    setMessages((prev) => ({
+      ...prev,
+      [selectedChat]: (prev[selectedChat] ?? []).filter((m) => m.id !== messageId),
+    }))
+  }
+
+  const handleStartChatWithUser = (person: UserDto) => {
+    setSearch("")
+    const socket = getSocket(token)
+    socket.emit("chat:create_room", {
+      name: getUserDisplayName(person),
+      description: null,
+      creatorId: user.id,
+      memberEmails: [person.email],
     })
   }
 
@@ -422,19 +509,59 @@ export function ChatPage({ user, token }: ChatPageProps) {
                   </section>
                 ) : null}
 
-                <section className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                      {search ? "Search results" : "Recent conversations"}
-                    </h2>
-                    <span className="text-xs text-muted-foreground">{recentChats.length}</span>
-                  </div>
-                  <ChatList
-                    chats={recentChats}
-                    selectedChat={selectedChat}
-                    onSelectChat={handleSelectChat}
-                  />
-                </section>
+                {recentChats.length > 0 && (
+                  <section className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        {search ? "Conversations" : "Recent conversations"}
+                      </h2>
+                      <span className="text-xs text-muted-foreground">{recentChats.length}</span>
+                    </div>
+                    <ChatList
+                      chats={recentChats}
+                      selectedChat={selectedChat}
+                      onSelectChat={handleSelectChat}
+                    />
+                  </section>
+                )}
+
+                {filteredPeople.length > 0 && (
+                  <section className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        People
+                      </h2>
+                      <span className="text-xs text-muted-foreground">{filteredPeople.length}</span>
+                    </div>
+                    <div className="space-y-1">
+                      {filteredPeople.map((person) => (
+                        <div
+                          key={person.id}
+                          className="flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-background/60 px-3 py-2.5"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                              <User className="size-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium text-foreground">
+                                {getUserDisplayName(person)}
+                              </p>
+                              <p className="truncate text-xs text-muted-foreground">{person.email}</p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleStartChatWithUser(person)}
+                            className="shrink-0 flex items-center gap-1 rounded-xl bg-primary/10 px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
+                          >
+                            <MessageSquarePlus className="size-3.5" />
+                            Chat
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
               </>
             ) : (
               <Empty className="mt-8 rounded-[28px] border border-dashed border-border/80 bg-background/60 py-14">
@@ -471,7 +598,11 @@ export function ChatPage({ user, token }: ChatPageProps) {
                 onShowMembers={handleShowMembers}
               />
               <div className="flex-1 overflow-y-auto">
-                <MessageList messages={messages[selectedChat] ?? []} />
+                <MessageList
+                  messages={messages[selectedChat] ?? []}
+                  onEditMessage={handleEditMessage}
+                  onDeleteMessage={handleDeleteMessage}
+                />
               </div>
               <MessageInput onSend={handleSendMessage} />
             </>

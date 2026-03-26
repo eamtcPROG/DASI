@@ -34,7 +34,13 @@ type CreateRoomPayload = {
 };
 
 type ChatEventPayload = {
-  event: "join_room" | "send_message" | "leave_room" | "create_room";
+  event:
+    | "join_room"
+    | "send_message"
+    | "leave_room"
+    | "create_room"
+    | "edit_message"
+    | "delete_message";
   payload: {
     roomId?: number;
     userId?: number;
@@ -44,6 +50,7 @@ type ChatEventPayload = {
     creatorId?: number;
     memberEmails?: string[];
     memberUserIds?: number[];
+    messageId?: number;
   };
 };
 
@@ -203,14 +210,46 @@ export class ChatEventController {
             ]);
           }
 
-          const room = await this.chatService.createRoom({
+          result = await this.chatService.createRoom({
             name,
             description: description ?? null,
             creatorId,
             memberEmails: memberEmails ?? [],
             memberUserIds,
           } satisfies CreateRoomPayload);
-          result = room;
+          break;
+        }
+        case "edit_message": {
+          const { messageId, userId, content } = data.payload;
+          if (messageId === undefined || userId === undefined || !content) {
+            return new ResultObjectDto(null, true, 400, [
+              { type: 2, message: "Invalid edit message payload" },
+            ]);
+          }
+
+          const edited = await this.chatService.editMessage({
+            messageId,
+            userId,
+            content,
+          });
+          this.chatGateway.broadcastMessageEdited(edited.room_id, edited);
+          result = { success: true, message: edited };
+          break;
+        }
+        case "delete_message": {
+          const { messageId, userId } = data.payload;
+          if (messageId === undefined || userId === undefined) {
+            return new ResultObjectDto(null, true, 400, [
+              { type: 2, message: "Invalid delete message payload" },
+            ]);
+          }
+
+          const { roomId } = await this.chatService.deleteMessage({
+            messageId,
+            userId,
+          });
+          this.chatGateway.broadcastMessageDeleted(roomId, messageId);
+          result = { success: true };
           break;
         }
         default:

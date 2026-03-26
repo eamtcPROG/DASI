@@ -165,7 +165,7 @@ export class RealtimeGateway
     };
 
     return Object.values(identityResult.object ?? {}).filter(
-      (userId): userId is number => typeof userId === "number",
+      (userId): userId is number => true,
     );
   }
 
@@ -291,11 +291,10 @@ export class RealtimeGateway
         const messageData = response.object as SendMessageResult;
         const savedMessage = messageData.message;
         if (savedMessage) {
+          const msgWithId = savedMessage as ChatMessage & { id?: unknown };
           await this.analyticsEvents.publish("message.created", {
             messageId:
-              typeof (savedMessage as any).id === "number"
-                ? (savedMessage as any).id
-                : undefined,
+              typeof msgWithId.id === "number" ? msgWithId.id : undefined,
             userId: savedMessage.user_id,
             roomId: payload.roomId,
             // Use gateway receive time to avoid DB timezone skew in short windows.
@@ -323,6 +322,73 @@ export class RealtimeGateway
     } catch (error) {
       console.error("Error in chat:send_message:", error);
       client.emit("chat:error", { message: "Failed to send message" });
+    }
+  }
+
+  @SubscribeMessage("chat:edit_message")
+  async handleChatEditMessage(
+    @ConnectedSocket() client: TypedSocket,
+    @MessageBody()
+    payload: { messageId: number; roomId: number; content: string },
+  ) {
+    const sender = client.data.user;
+    if (!sender || !payload?.messageId || !payload?.roomId || !payload?.content)
+      return;
+
+    try {
+      const response = await this.chatProxyService.sendChatEvent(
+        "edit_message",
+        {
+          messageId: payload.messageId,
+          userId: sender.id,
+          content: payload.content,
+        },
+      );
+
+      if (response && response.object) {
+        const messageData = response.object as { message?: ChatMessage };
+        const savedMessage = messageData.message;
+        if (savedMessage) {
+          const user =
+            (await this.fetchIdentityUser(
+              savedMessage.user_id,
+              this.getSocketToken(client),
+            )) ?? this.getFallbackUser(savedMessage.user_id);
+          const enriched: ChatMessageWithUser = { ...savedMessage, user };
+
+          this.server.to(`room:${payload.roomId}`).emit("chat:message_edited", {
+            roomId: payload.roomId,
+            message: enriched,
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error in chat:edit_message:", error);
+      client.emit("chat:error", { message: "Failed to edit message" });
+    }
+  }
+
+  @SubscribeMessage("chat:delete_message")
+  async handleChatDeleteMessage(
+    @ConnectedSocket() client: TypedSocket,
+    @MessageBody() payload: { messageId: number; roomId: number },
+  ) {
+    const sender = client.data.user;
+    if (!sender || !payload?.messageId || !payload?.roomId) return;
+
+    try {
+      await this.chatProxyService.sendChatEvent("delete_message", {
+        messageId: payload.messageId,
+        userId: sender.id,
+      });
+
+      this.server.to(`room:${payload.roomId}`).emit("chat:message_deleted", {
+        roomId: payload.roomId,
+        messageId: payload.messageId,
+      });
+    } catch (error) {
+      console.error("Error in chat:delete_message:", error);
+      client.emit("chat:error", { message: "Failed to delete message" });
     }
   }
 
@@ -404,10 +470,16 @@ export class RealtimeGateway
         });
 
         // Notify invited members that they've been added to a new room
+        const inviterName =
+          [sender.firstName, sender.lastName]
+            .filter(Boolean)
+            .join(" ")
+            .trim() || sender.email;
         for (const userId of memberUserIds) {
           this.server.to(`user:${userId}`).emit("chat:room_invitation", {
             room: response.object,
             invitedBy: sender.id,
+            inviterName,
             memberEmails,
           });
         }
