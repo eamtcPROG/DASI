@@ -31,7 +31,7 @@ export default function HomePage() {
 
           <nav className="hidden items-center gap-6 text-sm text-muted-foreground md:flex">
             <a href="#features" className="transition-colors hover:text-foreground">
-              Features5
+              Features7
             </a>
             <a href="#experience" className="transition-colors hover:text-foreground">
               Experience
