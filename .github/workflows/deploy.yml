@@ -129,6 +129,6 @@ jobs:
             CHANGED_SERVICES="${{ needs.detect-services.outputs.services_list }}"
             echo "Deploying services: $CHANGED_SERVICES"
 
-            docker compose -f docker-compose.prod.yml pull $CHANGED_SERVICES
-            docker compose -f docker-compose.prod.yml up -d $CHANGED_SERVICES
+            docker compose -f docker-compose.prod.yaml pull $CHANGED_SERVICES
+            docker compose -f docker-compose.prod.yaml up -d $CHANGED_SERVICES
             docker image prune -f
