@@ -15,7 +15,7 @@ env:
   REGION: ${{ vars.GCP_REGION }}
   REPOSITORY: dasi
   SERVICES_DIR: services
-  VM_APP_PATH: ~/DASI/services
+  VM_APP_PATH: /home/alexgrama836/DASI/services
 
 jobs:
   detect-services:
