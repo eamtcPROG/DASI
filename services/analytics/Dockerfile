@@ -1,4 +1,4 @@
-# Build context must be services/ (compose file dir). All COPY from analytics/ so we never pull another service.
+# Build context must be this directory (services/analytics). See docker-compose: context ./analytics.
 FROM node:alpine AS builder
 
 WORKDIR /app

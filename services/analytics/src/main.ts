@@ -14,7 +14,7 @@ async function bootstrap() {
   const queue = config.get<string>('rabbitmq.queue') ?? 'analytics';
 
   if (!rabbitmqUrl) {
-    throw new Error('RABBITMQ_URI is not set');
+    throw new Error('RABBITMQ_URI is not set in the environment variables.');
   }
 
   const swaggerConfig = new DocumentBuilder()
