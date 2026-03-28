@@ -1,5 +1,9 @@
 import { io, Socket } from "socket.io-client"
 
+/** Must match gateway Socket.IO path. Trailing slash matters: without it, requests are
+ *  `/socket.io?EIO=…` which does NOT match nginx `location /socket.io/` and hit Next → 404. */
+export const SOCKET_IO_PATH = "/socket.io/"
+
 /**
  * Public base URL for Socket.IO. Resolved at connect time (not module load) so the
  * browser sees the real hostname.
@@ -54,11 +58,14 @@ export function getSocket(token: string): Socket {
   console.log("Creating new socket connection to:", baseUrl)
 
   socket = io(baseUrl, {
+    path: SOCKET_IO_PATH,
     auth: { token },
     autoConnect: true,
     reconnection: true,
-    reconnectionAttempts: 5,
-    reconnectionDelay: 1000,
+    reconnectionAttempts: 8,
+    reconnectionDelay: 2000,
+    reconnectionDelayMax: 15000,
+    randomizationFactor: 0.5,
   })
 
   // Add connection event logging
