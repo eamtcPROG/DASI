@@ -50,7 +50,7 @@ export class CreateRoomRequestDto {
 
   @ApiProperty({
     example: ["user1@example.com", "user2@example.com"],
-    description: "List of member emails to add",
+    description: "List of member emails to add to the room",
   })
   memberEmails: string[];
 }
