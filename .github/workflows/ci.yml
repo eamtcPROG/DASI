@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
     branches:
-      - main
+      - development
 
 permissions:
   contents: read
@@ -29,6 +29,8 @@ jobs:
         id: set-matrix
         shell: bash
         run: |
+          set -e
+
           BASE="${{ github.event.pull_request.base.sha }}"
           HEAD="${{ github.event.pull_request.head.sha }}"
 
@@ -58,6 +60,12 @@ jobs:
           echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
           echo "has_changes=true" >> "$GITHUB_OUTPUT"
           echo "services_list=$SERVICES_LIST" >> "$GITHUB_OUTPUT"
+
+      - name: Show detected services
+        run: |
+          echo "has_changes=${{ steps.set-matrix.outputs.has_changes }}"
+          echo "services_list=${{ steps.set-matrix.outputs.services_list }}"
+          echo 'matrix=${{ steps.set-matrix.outputs.matrix }}'
 
   build-check:
     needs: detect-services
