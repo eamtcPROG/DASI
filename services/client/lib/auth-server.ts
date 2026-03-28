@@ -95,11 +95,19 @@ export async function requestGateway<T>(
   }
 }
 
+/** Use Secure cookies on HTTPS in production; override with SECURE_COOKIES=true|false. */
+function sessionCookieSecure(): boolean {
+  const flag = process.env.SECURE_COOKIES
+  if (flag === "true") return true
+  if (flag === "false") return false
+  return process.env.NODE_ENV === "production"
+}
+
 export function getSessionCookieOptions() {
   return {
     httpOnly: true,
     sameSite: "lax" as const,
-    secure: process.env.SECURE_COOKIES === "true",
+    secure: sessionCookieSecure(),
     path: "/",
     maxAge: SESSION_MAX_AGE,
   }
