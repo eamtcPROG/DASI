@@ -1,9 +1,9 @@
-name: Deploy Production
+name: Deploy Staging
 
 on:
   push:
     branches:
-      - production
+      - development
 
 permissions:
   contents: read
@@ -97,13 +97,13 @@ jobs:
       - name: Build image
         run: |
           docker build \
-            -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ matrix.service }}:latest \
+            -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ matrix.service }}:staging \
             ./${{ env.SERVICES_DIR }}/${{ matrix.service }}
 
       - name: Push image
         run: |
           docker push \
-            ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ matrix.service }}:latest
+            ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ matrix.service }}:staging
 
   deploy:
     needs: [detect-services, build-and-push]
@@ -111,19 +111,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy changed services on prod VM
+      - name: Deploy changed services on staging VM
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.VM_HOST }}
-          username: ${{ secrets.VM_USER }}
-          key: ${{ secrets.VM_SSH_KEY }}
+          host: ${{ secrets.STAGING_VM_HOST }}
+          username: ${{ secrets.STAGING_VM_USER }}
+          key: ${{ secrets.STAGING_VM_SSH_KEY }}
           script: |
             set -e
             cd ${{ env.VM_APP_PATH }}
 
             CHANGED_SERVICES="${{ needs.detect-services.outputs.services_list }}"
-            echo "Deploying services to production: $CHANGED_SERVICES"
+            echo "Deploying services to staging: $CHANGED_SERVICES"
 
-            docker compose -f docker-compose.prod.yaml pull $CHANGED_SERVICES
-            docker compose -f docker-compose.prod.yaml up -d $CHANGED_SERVICES
+            docker compose -f docker-compose.staging.yaml pull $CHANGED_SERVICES
+            docker compose -f docker-compose.staging.yaml up -d $CHANGED_SERVICES
             docker image prune -f
