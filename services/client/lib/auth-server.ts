@@ -73,20 +73,41 @@ export async function requestGateway<T>(
     headers.set("Authorization", `Bearer ${token}`)
   }
 
+  const url = `${getGatewayUrl()}${path}`
+
   try {
-    const response = await fetch(`${getGatewayUrl()}${path}`, {
+    const response = await fetch(url, {
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
       cache: "no-store",
     })
 
+    const payload = await parseJson<T>(response)
+
+    if (process.env.AUTH_DEBUG_LOG === "true") {
+      console.info("[auth] requestGateway", {
+        path,
+        url,
+        method,
+        ok: response.ok,
+        status: response.status,
+        hasPayload: payload != null,
+      })
+    }
+
     return {
       ok: response.ok,
       status: response.status,
-      payload: await parseJson<T>(response),
+      payload,
     }
-  } catch {
+  } catch (err) {
+    console.error("[auth] requestGateway fetch failed", {
+      path,
+      url,
+      method,
+      error: err instanceof Error ? err.message : String(err),
+    })
     return {
       ok: false,
       status: 503,
@@ -193,10 +214,26 @@ export const getSessionFromCookie = cache(async () => {
   const token = cookieStore.get(AUTH_COOKIE_NAME)?.value
 
   if (!token) {
+    if (process.env.AUTH_DEBUG_LOG === "true") {
+      const names = cookieStore.getAll().map((c: { name: string }) => c.name)
+      console.info("[auth] getSessionFromCookie: no session cookie", {
+        cookieName: AUTH_COOKIE_NAME,
+        cookieNamesPresent: names,
+      })
+    }
     return null
   }
 
-  return getSessionFromToken(token)
+  const session = await getSessionFromToken(token)
+
+  if (!session && process.env.AUTH_DEBUG_LOG === "true") {
+    console.info("[auth] getSessionFromCookie: refresh failed", {
+      tokenPreview:
+        token.length > 12 ? `${token.slice(0, 8)}…(len=${token.length})` : "(short)",
+    })
+  }
+
+  return session
 })
 
 export async function requireUser(): Promise<UserDto> {
