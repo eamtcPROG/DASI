@@ -207,8 +207,8 @@ services:
     container_name: analytics-service
     image: dasi-analytics:latest
     build:
-      context: .
-      dockerfile: analytics/Dockerfile
+      context: ./analytics
+      dockerfile: Dockerfile
     env_file:
       - ./analytics/env/.env.production
     ports:
