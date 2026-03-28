@@ -7,12 +7,13 @@ import {
   type ResultObjectDto,
 } from "@/lib/auth"
 import {
+  clearSessionCookie,
   createErrorResponse,
   getSessionCookieOptions,
   requestGateway,
 } from "@/lib/auth-server"
 
-export async function GET() {
+export async function GET(request: Request) {
   const cookieStore = await cookies()
   const token = cookieStore.get(AUTH_COOKIE_NAME)?.value
 
@@ -29,7 +30,7 @@ export async function GET() {
 
   if (!payload) {
     const response = createErrorResponse("Gateway service is unavailable.", 503)
-    response.cookies.delete(AUTH_COOKIE_NAME)
+    clearSessionCookie(response, request)
     return response
   }
 
@@ -39,10 +40,10 @@ export async function GET() {
     response.cookies.set(
       AUTH_COOKIE_NAME,
       payload.object.access_token,
-      getSessionCookieOptions(),
+      getSessionCookieOptions(request),
     )
   } else {
-    response.cookies.delete(AUTH_COOKIE_NAME)
+    clearSessionCookie(response, request)
   }
 
   return response

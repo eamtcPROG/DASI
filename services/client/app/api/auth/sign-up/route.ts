@@ -7,6 +7,7 @@ import {
   type ResultObjectDto,
 } from "@/lib/auth"
 import {
+  clearSessionCookie,
   createErrorResponse,
   getSessionCookieOptions,
   requestGateway,
@@ -31,7 +32,7 @@ export async function POST(request: Request) {
 
   if (!payload) {
     const response = createErrorResponse("Gateway service is unavailable.", 503)
-    response.cookies.delete(AUTH_COOKIE_NAME)
+    clearSessionCookie(response, request)
     return response
   }
 
@@ -41,10 +42,10 @@ export async function POST(request: Request) {
     response.cookies.set(
       AUTH_COOKIE_NAME,
       payload.object.access_token,
-      getSessionCookieOptions(),
+      getSessionCookieOptions(request),
     )
   } else {
-    response.cookies.delete(AUTH_COOKIE_NAME)
+    clearSessionCookie(response, request)
   }
 
   return response
