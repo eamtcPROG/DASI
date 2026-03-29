@@ -87,10 +87,10 @@ export class ChatService {
    * Get chat history for a specific room
    */
   async getRoomHistory(roomId: number): Promise<Message[]> {
+    // No relations: avoids bloated payloads and JSON cycles over RabbitMQ.
     return this.messageRepository.find({
       where: { room_id: roomId, is_deleted: false },
       order: { created_at: "ASC" },
-      relations: ["room"],
     });
   }
 

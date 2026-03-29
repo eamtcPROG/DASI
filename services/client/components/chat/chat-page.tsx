@@ -195,31 +195,45 @@ export function ChatPage({ user, token }: ChatPageProps) {
     })
 
     socket.on("chat:history", (data) => {
-      const { roomId, messages: historyMessages } = data
+      const { roomId, messages: historyMessages } = data ?? {}
       const chatId = String(roomId)
-      
-      const formattedMessages = historyMessages.map((msg: any) => ({
-        id: String(msg.id),
-        content: msg.content,
-        time: new Date(msg.created_at).toLocaleTimeString("en-US", {
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: false,
-        }),
-        sent: msg.user_id === user.id,
-        read: false,
-        senderName: msg.user_id === user.id ? undefined : (
-          msg.user?.firstName && msg.user?.lastName 
-            ? `${msg.user.firstName} ${msg.user.lastName}`
-            : msg.user?.firstName || msg.user?.lastName || msg.user?.email || `User ${msg.user_id}`
-        ),
-        senderId: msg.user_id,
-      }))
-      
-      setMessages((prev) => ({
-        ...prev,
-        [chatId]: formattedMessages,
-      }))
+      const list = Array.isArray(historyMessages) ? historyMessages : []
+
+      setMessages((prev) => {
+        const existing = prev[chatId] ?? []
+        // Duplicate join_room runs (e.g. when `chats` updates) must not wipe the
+        // thread with an empty payload if we already showed history or optimistic sends.
+        if (list.length === 0 && existing.length > 0) {
+          return prev
+        }
+
+        const formattedMessages = list.map((msg: any) => ({
+          id: String(msg.id),
+          content: msg.content,
+          time: new Date(msg.created_at).toLocaleTimeString("en-US", {
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+          }),
+          sent: msg.user_id === user.id,
+          read: false,
+          senderName:
+            msg.user_id === user.id
+              ? undefined
+              : msg.user?.firstName && msg.user?.lastName
+                ? `${msg.user.firstName} ${msg.user.lastName}`
+                : msg.user?.firstName ||
+                  msg.user?.lastName ||
+                  msg.user?.email ||
+                  `User ${msg.user_id}`,
+          senderId: msg.user_id,
+        }))
+
+        return {
+          ...prev,
+          [chatId]: formattedMessages,
+        }
+      })
     })
 
     socket.on("chat:room_created", (data) => {
