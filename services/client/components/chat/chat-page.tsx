@@ -43,19 +43,33 @@ type Chat = {
   description?: string
 }
 
+function formatSidebarTime(iso: string | null | undefined): string {
+  if (!iso) return ""
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ""
+  return d.toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  })
+}
+
 /** Map gateway /chat/rooms entry to sidebar row. */
 function mapApiRoomToChat(room: {
   id: number | string
   name: string
   description?: string
+  lastMessage?: string | null
+  lastMessageAt?: string | null
 }): Chat {
   return {
     id: String(room.id),
     name: room.name,
-    lastMessage: "",
-    time: "",
+    lastMessage: room.lastMessage ?? "",
+    time: formatSidebarTime(room.lastMessageAt),
     unread: 0,
     status: "Offline",
+    role: "",
     description: room.description,
     pinned: false,
   }
@@ -89,6 +103,10 @@ export function ChatPage({ user, token }: ChatPageProps) {
   const [showMembersModal, setShowMembersModal] = useState(false)
   const [allUsers, setAllUsers] = useState<UserDto[]>([])
   const typingTimeouts = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map())
+  const chatsRef = useRef<Chat[]>([])
+  chatsRef.current = chats
+  const selectedChatRef = useRef<string | null>(null)
+  selectedChatRef.current = selectedChat
 
   useEffect(() => {
     const loadUserRooms = async () => {
@@ -131,28 +149,24 @@ export function ChatPage({ user, token }: ChatPageProps) {
     loadUsers()
   }, [user.id])
 
-  // Auto-load room history when selected chat changes
-  useEffect(() => {
-    if (selectedChat) {
-      const socket = getSocket(token)
-      // Emit join room event to load history
-      socket.emit("chat:join_room", { roomId: Number(selectedChat) })
-    }
-  }, [selectedChat, token])
-
-  // Auto-join all rooms to receive real-time messages
+  // Register Socket.IO listeners BEFORE any chat:join_room emits (same render cycle on token
+  // change, or a fast WebSocket can deliver chat:history before handlers exist).
   useEffect(() => {
     const socket = getSocket(token)
-    if (chats.length > 0) {
-      chats.forEach(chat => {
-        socket.emit("chat:join_room", { roomId: Number(chat.id) })
-      })
-    }
-  }, [chats, token])
 
-  useEffect(() => {
-    // Connect to WebSocket immediately when page loads
-    const socket = getSocket(token)
+    const requestJoins = () => {
+      const sock = getSocket(token)
+      const sel = selectedChatRef.current
+      if (sel) {
+        sock.emit("chat:join_room", { roomId: Number(sel) })
+      }
+      for (const c of chatsRef.current) {
+        sock.emit("chat:join_room", { roomId: Number(c.id) })
+      }
+    }
+
+    socket.on("connect", requestJoins)
+    socket.on("reconnect", requestJoins)
 
     socket.on("chat:new_message", (data) => {
       const { roomId, message } = data
@@ -238,13 +252,14 @@ export function ChatPage({ user, token }: ChatPageProps) {
 
     socket.on("chat:room_created", (data) => {
       const { room } = data
-      const newRoom = {
+      const newRoom: Chat = {
         id: String(room.id),
         name: room.name,
         lastMessage: "",
         time: new Date().toLocaleTimeString(),
         unread: 0,
         status: "active",
+        role: "",
         description: room.description,
         pinned: false,
       }
@@ -256,15 +271,16 @@ export function ChatPage({ user, token }: ChatPageProps) {
 
     socket.on("chat:room_invitation", (data) => {
       const { room, inviterName } = data
-      const newRoom = {
+      const newRoom: Chat = {
         id: String(room.id),
         name: inviterName ?? room.name,
         lastMessage: "",
         time: new Date().toLocaleTimeString(),
         unread: 1,
         status: "active",
+        role: "",
         description: room.description,
-        pinned: false
+        pinned: false,
       }
 
       setChats((prev) => {
@@ -336,8 +352,12 @@ export function ChatPage({ user, token }: ChatPageProps) {
       )
     })
 
+    requestJoins()
+
     return () => {
       console.log("🧹 Cleaning up WebSocket listeners...")
+      socket.off("connect", requestJoins)
+      socket.off("reconnect", requestJoins)
       socket.off("chat:new_message")
       socket.off("chat:history")
       socket.off("chat:room_created")
@@ -349,8 +369,21 @@ export function ChatPage({ user, token }: ChatPageProps) {
     }
   }, [token, user.id])
 
-  const selectedChatRef = useRef<string | null>(null)
-  selectedChatRef.current = selectedChat
+  // Join selected room for history (listeners are already registered above).
+  useEffect(() => {
+    if (!selectedChat) return
+    const socket = getSocket(token)
+    socket.emit("chat:join_room", { roomId: Number(selectedChat) })
+  }, [selectedChat, token])
+
+  // Join all rooms for realtime (listeners already registered).
+  useEffect(() => {
+    const socket = getSocket(token)
+    if (chats.length === 0) return
+    for (const chat of chats) {
+      socket.emit("chat:join_room", { roomId: Number(chat.id) })
+    }
+  }, [chats, token])
 
   const filteredChats = useMemo(() => {
     const query = search.trim().toLowerCase()
