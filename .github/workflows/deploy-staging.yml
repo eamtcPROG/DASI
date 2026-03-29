@@ -119,11 +119,17 @@ jobs:
           key: ${{ secrets.STAGING_VM_SSH_KEY }}
           script: |
             set -e
+
+            cd /home/alexgrama837/DASI
+            git fetch origin
+            git checkout development
+            git pull origin development
+
             cd ${{ env.VM_APP_PATH }}
 
             CHANGED_SERVICES="${{ needs.detect-services.outputs.services_list }}"
             echo "Deploying services to staging: $CHANGED_SERVICES"
 
             docker compose -f docker-compose.staging.yaml pull $CHANGED_SERVICES
-            docker compose -f docker-compose.staging.yaml up -d $CHANGED_SERVICES
+            docker compose -f docker-compose.staging.yaml up -d --force-recreate --no-deps $CHANGED_SERVICES
             docker image prune -f
