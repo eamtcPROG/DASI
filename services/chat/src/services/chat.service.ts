@@ -62,7 +62,9 @@ export class ChatService {
       relations: ["room"],
     });
 
-    const roomIds = [...new Set(roomMembers.map((rm) => rm.room_id))];
+    const roomIds: number[] = [
+      ...new Set(roomMembers.map((rm) => rm.room_id as number)),
+    ];
     const latestByRoom = await this.getLatestMessagesForRooms(roomIds);
 
     return roomMembers.map((roomMember) => {
@@ -241,20 +243,17 @@ export class ChatService {
       joined_at: new Date(),
     });
 
-    // Add other members (if any)
-    if (data.memberEmails && data.memberEmails.length > 0) {
-      // Note: memberEmails should already be resolved to user IDs by the gateway
-      // For now, we'll just add them as members with the provided IDs
-      if (data.memberUserIds && data.memberUserIds.length > 0) {
-        for (const userId of data.memberUserIds) {
-          await this.roomMemberRepository.save({
-            room_id: savedRoom.id,
-            user_id: userId,
-            role: 1, // Regular member
-            joined_at: new Date(),
-          });
-        }
-      }
+    // Add other members by resolved IDs (gateway is source of truth; do not gate on memberEmails).
+    const inviteeIds = [...new Set(data.memberUserIds ?? [])].filter(
+      (id) => id !== data.creatorId,
+    );
+    for (const userId of inviteeIds) {
+      await this.roomMemberRepository.save({
+        room_id: savedRoom.id,
+        user_id: userId,
+        role: 1, // Regular member
+        joined_at: new Date(),
+      });
     }
 
     return {

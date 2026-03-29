@@ -144,6 +144,18 @@ export class RealtimeGateway
     emails: string[],
     token?: string,
   ): Promise<number[]> {
+    const normalized = [
+      ...new Set(
+        emails
+          .map((e) => e.trim().toLowerCase())
+          .filter((e) => e.length > 0),
+      ),
+    ];
+
+    if (normalized.length === 0) {
+      return [];
+    }
+
     const identityResponse = await fetch(
       `${this.identityServiceUrl}/user/lookup-emails`,
       {
@@ -152,7 +164,7 @@ export class RealtimeGateway
           "Content-Type": "application/json",
           ...(this.getAuthHeaders(token) ?? {}),
         },
-        body: JSON.stringify({ emails }),
+        body: JSON.stringify({ emails: normalized }),
       },
     );
 
@@ -164,9 +176,17 @@ export class RealtimeGateway
       object?: Record<string, number>;
     };
 
-    return Object.values(identityResult.object ?? {}).filter(
-      (userId): userId is number => true,
-    );
+    const map = identityResult.object ?? {};
+    const ids: number[] = [];
+    for (const email of normalized) {
+      const id = map[email];
+      if (typeof id !== "number") {
+        throw new Error(`No user registered for email: ${email}`);
+      }
+      ids.push(id);
+    }
+
+    return [...new Set(ids)];
   }
 
   private getFallbackUser(userId: number): UserDto {

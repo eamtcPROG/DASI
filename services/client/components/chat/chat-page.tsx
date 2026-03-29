@@ -41,6 +41,8 @@ type Chat = {
   role: string
   pinned: boolean
   description?: string
+  /** For ordering the list by latest activity (message time or room created). */
+  lastActivityAt?: number
 }
 
 function formatSidebarTime(iso: string | null | undefined): string {
@@ -62,6 +64,8 @@ function mapApiRoomToChat(room: {
   lastMessage?: string | null
   lastMessageAt?: string | null
 }): Chat {
+  const lastAt = room.lastMessageAt
+  const lastMs = lastAt ? new Date(lastAt).getTime() : NaN
   return {
     id: String(room.id),
     name: room.name,
@@ -72,6 +76,7 @@ function mapApiRoomToChat(room: {
     role: "",
     description: room.description,
     pinned: false,
+    lastActivityAt: Number.isFinite(lastMs) ? lastMs : undefined,
   }
 }
 
@@ -80,7 +85,13 @@ function mapApiRoomToChat(room: {
  * cannot wipe a room we already added via chat:room_created / chat:room_invitation.
  */
 function mergeChatsFromApi(
-  apiRooms: Array<{ id: number | string; name: string; description?: string }>,
+  apiRooms: Array<{
+    id: number | string
+    name: string
+    description?: string
+    lastMessage?: string | null
+    lastMessageAt?: string | null
+  }>,
   prev: Chat[],
 ): Chat[] {
   const fromApi = apiRooms.map(mapApiRoomToChat)
@@ -194,14 +205,17 @@ export function ChatPage({ user, token }: ChatPageProps) {
         [chatId]: [...(prev[chatId] ?? []), newMessage],
       }))
 
+      const msgTs = new Date(message.created_at).getTime()
       setChats((prev) =>
         prev.map((chat) =>
           chat.id === chatId
-            ? { 
-                ...chat, 
-                lastMessage: message.content, 
-                time: "Now", 
-                unread: selectedChatRef.current === chatId ? chat.unread : chat.unread + 1 
+            ? {
+                ...chat,
+                lastMessage: message.content,
+                time: "Now",
+                lastActivityAt: Number.isFinite(msgTs) ? msgTs : Date.now(),
+                unread:
+                  selectedChatRef.current === chatId ? chat.unread : chat.unread + 1,
               }
             : chat,
         ),
@@ -248,10 +262,37 @@ export function ChatPage({ user, token }: ChatPageProps) {
           [chatId]: formattedMessages,
         }
       })
+
+      // Sidebar preview: show the latest message in the thread (history is ordered ASC).
+      if (list.length > 0) {
+        const last = list[list.length - 1] as {
+          content: string
+          created_at: string
+        }
+        const lastTs = new Date(last.created_at).getTime()
+        const timeStr = new Date(last.created_at).toLocaleTimeString("en-US", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        })
+        setChats((prev) =>
+          prev.map((chat) =>
+            chat.id === chatId
+              ? {
+                  ...chat,
+                  lastMessage: last.content,
+                  time: timeStr,
+                  lastActivityAt: Number.isFinite(lastTs) ? lastTs : Date.now(),
+                }
+              : chat,
+          ),
+        )
+      }
     })
 
     socket.on("chat:room_created", (data) => {
       const { room } = data
+      const now = Date.now()
       const newRoom: Chat = {
         id: String(room.id),
         name: room.name,
@@ -262,6 +303,7 @@ export function ChatPage({ user, token }: ChatPageProps) {
         role: "",
         description: room.description,
         pinned: false,
+        lastActivityAt: now,
       }
 
       setChats((prev) => [newRoom, ...prev])
@@ -271,16 +313,20 @@ export function ChatPage({ user, token }: ChatPageProps) {
 
     socket.on("chat:room_invitation", (data) => {
       const { room, inviterName } = data
+      const now = Date.now()
       const newRoom: Chat = {
         id: String(room.id),
-        name: inviterName ?? room.name,
+        name: room.name,
         lastMessage: "",
         time: new Date().toLocaleTimeString(),
         unread: 1,
         status: "active",
         role: "",
-        description: room.description,
+        description:
+          room.description ||
+          (inviterName ? `Invited by ${inviterName}` : undefined),
         pinned: false,
+        lastActivityAt: now,
       }
 
       setChats((prev) => {
@@ -385,14 +431,23 @@ export function ChatPage({ user, token }: ChatPageProps) {
     }
   }, [chats, token])
 
+  const chatsSortedByRecent = useMemo(
+    () =>
+      [...chats].sort(
+        (a, b) => (b.lastActivityAt ?? 0) - (a.lastActivityAt ?? 0),
+      ),
+    [chats],
+  )
+
   const filteredChats = useMemo(() => {
     const query = search.trim().toLowerCase()
-    if (!query) return chats
-    return chats.filter(
+    if (!query) return chatsSortedByRecent
+    return chatsSortedByRecent.filter(
       (chat) =>
-        chat.name.toLowerCase().includes(query) || chat.lastMessage.toLowerCase().includes(query),
+        chat.name.toLowerCase().includes(query) ||
+        chat.lastMessage.toLowerCase().includes(query),
     )
-  }, [chats, search])
+  }, [chatsSortedByRecent, search])
 
   const filteredPeople = useMemo(() => {
     const query = search.trim().toLowerCase()
@@ -455,9 +510,12 @@ export function ChatPage({ user, token }: ChatPageProps) {
       [selectedChat]: [...(prev[selectedChat] ?? []), optimisticMessage],
     }))
 
+    const now = Date.now()
     setChats((prev) =>
       prev.map((chat) =>
-        chat.id === selectedChat ? { ...chat, lastMessage: content, time: "Now" } : chat,
+        chat.id === selectedChat
+          ? { ...chat, lastMessage: content, time: "Now", lastActivityAt: now }
+          : chat,
       ),
     )
 
