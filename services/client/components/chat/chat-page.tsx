@@ -40,8 +40,40 @@ type Chat = {
   status: string
   role: string
   pinned: boolean
+  description?: string
 }
 
+/** Map gateway /chat/rooms entry to sidebar row. */
+function mapApiRoomToChat(room: {
+  id: number | string
+  name: string
+  description?: string
+}): Chat {
+  return {
+    id: String(room.id),
+    name: room.name,
+    lastMessage: "",
+    time: "",
+    unread: 0,
+    status: "Offline",
+    description: room.description,
+    pinned: false,
+  }
+}
+
+/**
+ * Merge API rooms with existing UI state so a slow initial /chat/rooms response
+ * cannot wipe a room we already added via chat:room_created / chat:room_invitation.
+ */
+function mergeChatsFromApi(
+  apiRooms: Array<{ id: number | string; name: string; description?: string }>,
+  prev: Chat[],
+): Chat[] {
+  const fromApi = apiRooms.map(mapApiRoomToChat)
+  const apiIds = new Set(fromApi.map((c) => c.id))
+  const preserved = prev.filter((c) => !apiIds.has(c.id))
+  return [...preserved, ...fromApi]
+}
 
 type ChatPageProps = {
   user: UserDto
@@ -67,23 +99,15 @@ export function ChatPage({ user, token }: ChatPageProps) {
         
         const rooms = data?.object ?? []
 
-        setChats(
-          rooms.map((room: any) => ({
-            id: String(room.id),
-            name: room.name,
-            lastMessage: "",
-            time: "",
-            unread: 0,
-            status: "Offline",
-            description: room.description,
-            pinned: false,
-          }))
-        )
-        
-        // Automatically select the first room if none is selected
-        if (rooms.length > 0 && !selectedChat) {
-          setSelectedChat(String(rooms[0].id))
-        }
+        setChats((prev) => mergeChatsFromApi(rooms, prev))
+
+        // Select first room only if user still has none (avoid stale closure overwriting choice)
+        setSelectedChat((current) => {
+          if (rooms.length > 0 && !current) {
+            return String(rooms[0].id)
+          }
+          return current
+        })
       } catch (error) {
         console.error("❌ Error loading user rooms:", error)
       }
@@ -208,11 +232,12 @@ export function ChatPage({ user, token }: ChatPageProps) {
         unread: 0,
         status: "active",
         description: room.description,
-        pinned: false
+        pinned: false,
       }
 
       setChats((prev) => [newRoom, ...prev])
       setSelectedChat(String(room.id))
+      socket.emit("chat:join_room", { roomId: Number(room.id) })
     })
 
     socket.on("chat:room_invitation", (data) => {
@@ -240,6 +265,7 @@ export function ChatPage({ user, token }: ChatPageProps) {
           return [newRoom, ...prev]
         }
       })
+      socket.emit("chat:join_room", { roomId: Number(room.id) })
     })
 
     socket.on("chat:message_edited", (data) => {
