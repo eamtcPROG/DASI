@@ -8,6 +8,7 @@ DASI is a multi-service platform composed of a Next.js client, a NestJS gateway,
 - `services/gateway`: NestJS 11 API gateway that exposes `/auth/*`, `/health`, and chat/realtime integration.
 - `services/identity`: NestJS 11 auth and user service with PostgreSQL persistence and JWT handling.
 - `services/chat`: NestJS 11 chat service with PostgreSQL and RabbitMQ.
+- `services/notification`: NestJS 11 email service that consumes `send_email` messages from RabbitMQ and delivers them via SMTP (Resend, Gmail, or Ethereal for local preview).
 - Shared infrastructure: RabbitMQ plus separate PostgreSQL instances for identity and chat.
 
 Primary request flow:
@@ -26,8 +27,9 @@ See `docs/architecture.md` for the full architecture guide, request flows, and t
 | --- | --- | --- | --- | --- |
 | `services/client` | Next.js 16, React 19 | `3100` in local dev recommended | UI, auth forms, protected pages, gateway integration | `docs/architecture.md` |
 | `services/gateway` | NestJS 11 | `3000` | Public API, JWT enforcement, RMQ proxying, health checks | `docs/architecture.md` |
-| `services/identity` | NestJS 11, TypeORM, PostgreSQL | `3001` | Users, sign-up, sign-in, refresh, token validation | `services/identity/README.md` |
+| `services/identity` | NestJS 11, TypeORM, PostgreSQL | `3001` | Users, sign-up, sign-in, refresh, token validation, password reset | `services/identity/README.md` |
 | `services/chat` | NestJS 11, TypeORM, PostgreSQL | `3003` | Chat rooms, messages, RMQ handlers | `services/chat/README.md` |
+| `services/notification` | NestJS 11, Nodemailer | `3005` | Email delivery via SMTP, consumed from RabbitMQ `notification` queue | — |
 
 ## Repository layout
 
@@ -40,6 +42,7 @@ See `docs/architecture.md` for the full architecture guide, request flows, and t
 │   ├── gateway/
 │   ├── identity/
 │   ├── chat/
+│   ├── notification/
 │   ├── docker-compose.dev.yaml
 │   ├── docker-compose.test.yaml
 │   └── docker-compose.yaml
@@ -76,6 +79,7 @@ Install dependencies in each service directory:
 cd services/identity && npm install
 cd services/chat && npm install
 cd services/gateway && npm install
+cd services/notification && npm install
 cd services/client && pnpm install
 ```
 
@@ -87,6 +91,7 @@ Run each NestJS service in a separate terminal:
 cd services/identity && npm run start:dev
 cd services/chat && npm run start:dev
 cd services/gateway && npm run start:dev
+cd services/notification && npm run start:dev
 ```
 
 ### 4. Start the client on a non-conflicting port
@@ -108,6 +113,7 @@ cd services/client && npx next dev --port 3100
 | `http://127.0.0.1:3001/api` | Identity Swagger |
 | `http://127.0.0.1:3003` | Chat service |
 | `http://127.0.0.1:3003/api` | Chat Swagger |
+| `http://127.0.0.1:3005` | Notification service |
 
 ## Public API surface
 
@@ -119,6 +125,8 @@ The gateway is the intended backend entry point for the client and external cons
 - `POST /auth/sign-in`
 - `GET /auth/refresh`
 - `GET /auth/users?page=&onPage=`
+- `POST /auth/reset-password`
+- `POST /auth/reset-password/confirm`
 - `GET /health`
 
 ### Important routing note
@@ -163,6 +171,7 @@ This starts:
 - `gateway` on `localhost:3000`
 - `identity` on `localhost:3001`
 - `chat` on `localhost:3003`
+- `notification` on `localhost:3005`
 - `postgres-identity` on `localhost:5432`
 - `postgres-chat` on `localhost:5434`
 - `rabbitmq` on `localhost:5672`
@@ -172,6 +181,22 @@ This starts:
 
 - Backend e2e tests require the test stack from `services/docker-compose.test.yaml`.
 - The gateway includes realtime health metadata, but the realtime module currently reports `enabled: false`.
+
+## Notification service configuration
+
+The notification service sends emails via SMTP. Configure it in `services/notification/env/.env.*`.
+
+| Variable | Description |
+| --- | --- |
+| `SMTP_PREVIEW` | Set to `true` to use Ethereal (fake SMTP) and log preview URLs — no credentials needed |
+| `SMTP_HOST` | SMTP server hostname (e.g. `smtp.resend.com`) |
+| `SMTP_PORT` | SMTP port (e.g. `465` for TLS, `587` for STARTTLS) |
+| `SMTP_SECURE` | `true` for port 465, `false` for 587 |
+| `SMTP_USER` | SMTP username (e.g. `resend` for Resend) |
+| `SMTP_PASS` | SMTP password or API key |
+| `SMTP_FROM` | Sender address (e.g. `DASI <no-reply@yourdomain.com>`) |
+
+For local development without a domain, set `SMTP_PREVIEW=true` or use Resend with `SMTP_FROM=DASI <onboarding@resend.dev>` (emails will only be delivered to the Resend account owner's address).
 
 ## Additional documentation
 

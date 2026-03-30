@@ -2,9 +2,12 @@ import { Controller } from '@nestjs/common';
 import { Ctx, RmqContext } from '@nestjs/microservices';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { JwtService } from '@nestjs/jwt';
+
 import { UserService } from '../services/user.service';
 import { AuthTokenPayload } from 'src/dto/auth.dto';
 import { UserDto } from 'src/dto/user.dto';
+
+type RmqChannel = { ack(message: unknown): void };
 
 type ValidateTokenRequest = {
   token: string;
@@ -28,11 +31,11 @@ export class AuthEventController {
     @Payload() data: ValidateTokenRequest,
     @Ctx() context: RmqContext,
   ): Promise<ValidateTokenResponse> {
-    const channel = context.getChannelRef();
-    const originalMsg = context.getMessage();
+    const channel = context.getChannelRef() as RmqChannel;
+    const originalMsg = context.getMessage() as unknown;
     let response: ValidateTokenResponse;
     const token = data?.token;
-    
+
     if (!token) {
       response = { isValid: false, error: 'Missing token' };
       channel.ack(originalMsg);

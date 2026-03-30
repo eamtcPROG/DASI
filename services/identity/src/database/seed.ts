@@ -43,7 +43,9 @@ async function run(): Promise<void> {
   const userRepository = dataSource.getRepository(User);
 
   for (const plain of seedUsers) {
-    const existing = await userRepository.findOne({ where: { email: plain.email } });
+    const existing = await userRepository.findOne({
+      where: { email: plain.email },
+    });
     if (existing) {
       console.log(`User ${plain.email} already exists, skipping.`);
       continue;
