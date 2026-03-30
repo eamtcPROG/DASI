@@ -1,15 +1,45 @@
 import { io, Socket } from "socket.io-client"
 
-function getDefaultGatewayUrl() {
+/** Must match gateway Socket.IO path. Trailing slash matters: without it, requests are
+ *  `/socket.io?EIO=…` which does NOT match nginx `location /socket.io/` and hit Next → 404. */
+export const SOCKET_IO_PATH = "/socket.io/"
+
+/**
+ * Public base URL for Socket.IO. Resolved at connect time (not module load) so the
+ * browser sees the real hostname.
+ *
+ * - Production: same origin as the page when NEXT_PUBLIC_GATEWAY_URL is missing or still
+ *   points at localhost from an old Docker build (nginx must proxy /socket.io/ → gateway).
+ * - Local dev: Next :3100 + gateway :3000 → hostname:3000 or explicit NEXT_PUBLIC_GATEWAY_URL.
+ */
+function getSocketBaseUrl(): string {
+  const fromEnv = process.env.NEXT_PUBLIC_GATEWAY_URL?.replace(/\/$/, "") ?? ""
+
   if (typeof window === "undefined") {
-    return "http://localhost:3000"
+    return fromEnv || "http://localhost:3000"
   }
 
-  return `${window.location.protocol}//${window.location.hostname}:3000`
-}
+  const { hostname, origin, protocol } = window.location
+  const isLocalDev =
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "[::1]"
 
-const GATEWAY_URL =
-  (process.env.NEXT_PUBLIC_GATEWAY_URL ?? getDefaultGatewayUrl()).replace(/\/$/, "")
+  if (!isLocalDev) {
+    const envPointsToLoopback =
+      fromEnv.includes("localhost") || fromEnv.includes("127.0.0.1")
+    if (fromEnv && !envPointsToLoopback) {
+      return fromEnv
+    }
+    return origin
+  }
+
+  if (fromEnv) {
+    return fromEnv
+  }
+
+  return `${protocol}//${hostname}:3000`
+}
 
 let socket: Socket | null = null
 
@@ -24,14 +54,18 @@ export function getSocket(token: string): Socket {
     socket.disconnect()
   }
 
-  console.log("Creating new socket connection to:", GATEWAY_URL)
-  
-  socket = io(GATEWAY_URL, {
+  const baseUrl = getSocketBaseUrl()
+  console.log("Creating new socket connection to:", baseUrl)
+
+  socket = io(baseUrl, {
+    path: SOCKET_IO_PATH,
     auth: { token },
     autoConnect: true,
     reconnection: true,
-    reconnectionAttempts: 5,
-    reconnectionDelay: 1000,
+    reconnectionAttempts: 8,
+    reconnectionDelay: 2000,
+    reconnectionDelayMax: 15000,
+    randomizationFactor: 0.5,
   })
 
   // Add connection event logging

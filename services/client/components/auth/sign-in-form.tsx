@@ -48,6 +48,21 @@ export function SignInForm() {
 
       const result = (await response.json()) as ResultObjectDto<AuthDto>
 
+      console.log("[auth/sign-in client] fetch done", {
+        status: response.status,
+        ok: response.ok,
+        url: response.url,
+        contentType: response.headers.get("content-type"),
+      })
+      console.log(
+        "[auth/sign-in client] body (token visible here if login succeeded)",
+        result,
+      )
+      console.log(
+        "[auth/sign-in client] document.cookie (httpOnly session cookie will NOT appear here)",
+        typeof document !== "undefined" ? document.cookie : "(ssr)",
+      )
+
       if (!response.ok || !result.object) {
         const message = getResultMessage(result, "Unable to sign in.")
         setError(message)
