@@ -44,6 +44,20 @@ export class AuthProxyService {
     return this.request<ValidateTokenResponse>("validate_token", { token });
   }
 
+  requestPasswordReset(email: string) {
+    return this.request<ResultObjectDto<null>>("request_password_reset", {
+      email,
+    });
+  }
+
+  confirmPasswordReset(email: string, code: string, newPassword: string) {
+    return this.request<ResultObjectDto<null>>("confirm_password_reset", {
+      email,
+      code,
+      newPassword,
+    });
+  }
+
   private async request<T>(pattern: string, payload: unknown): Promise<T> {
     try {
       return await firstValueFrom(

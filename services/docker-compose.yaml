@@ -202,6 +202,34 @@ services:
     networks:
       - dasi-net
 
+  notification:
+    <<: *app-service
+    container_name: notification-service
+    build:
+      context: ./notification
+      dockerfile: Dockerfile
+    env_file:
+      - ./notification/env/.env.production
+    ports:
+      - ${NOTIFICATION_PORT:-3005}:3005
+    environment:
+      NODE_ENV: production
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:3005/',res=>process.exit(res.statusCode < 500 ? 0 : 1)).on('error',()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 25s
+
   analytics:
     <<: *app-service
     container_name: analytics-service

@@ -9,6 +9,7 @@ DASI is a multi-service platform with a Next.js client, a NestJS gateway, and do
 - `services/identity`: NestJS 11 identity/auth service with PostgreSQL persistence.
 - `services/chat`: NestJS 11 chat service with PostgreSQL persistence.
 - `services/analytics`: NestJS 11 analytics service with MongoDB persistence.
+- `services/notification`: NestJS 11 email service that consumes `send_email` messages from RabbitMQ and delivers them via SMTP (Resend, Gmail, or Ethereal for local preview).
 - Shared infrastructure: RabbitMQ plus Redis (gateway realtime support).
 
 See `docs/architecture.md` for detailed request flows, queues, and deployment topology.
@@ -22,6 +23,7 @@ See `docs/architecture.md` for detailed request flows, queues, and deployment to
 | `services/identity` | NestJS 11, TypeORM, PostgreSQL | `3001` | Sign-up, sign-in, refresh, user listing, token validation | `services/identity/README.md` |
 | `services/chat` | NestJS 11, TypeORM, PostgreSQL | `3003` | Chat rooms, room membership, messages | `services/chat/README.md` |
 | `services/analytics` | NestJS 11, Mongoose, MongoDB | `3004` | Aggregated platform stats and activity buckets | `services/analytics/README.md` |
+| `services/notification` | NestJS 11, Nodemailer | `3005` | Email delivery via SMTP, consumed from RabbitMQ `notification` queue | — |
 
 ## Repository layout
 
@@ -35,6 +37,7 @@ See `docs/architecture.md` for detailed request flows, queues, and deployment to
 │   ├── client/
 │   ├── gateway/
 │   ├── identity/
+│   ├── notification/
 │   ├── docker-compose.dev.yaml
 │   ├── docker-compose.test.yaml
 │   └── docker-compose.yaml
@@ -57,6 +60,7 @@ cd services/identity && npm install
 cd services/chat && npm install
 cd services/analytics && npm install
 cd services/gateway && npm install
+cd services/notification && npm install
 cd services/client && pnpm install
 ```
 
@@ -77,6 +81,7 @@ cd services/identity && npm run start:dev
 cd services/chat && npm run start:dev
 cd services/analytics && npm run start:dev
 cd services/gateway && npm run start:dev
+cd services/notification && npm run start:dev
 ```
 
 ### 4) Start client on a non-conflicting port
@@ -116,6 +121,7 @@ docker compose -f docker-compose.dev.yaml up -d
 | `http://127.0.0.1:3003/api` | Chat Swagger |
 | `http://127.0.0.1:3004` | Analytics service |
 | `http://127.0.0.1:3004/stats` | Analytics stats endpoint |
+| `http://127.0.0.1:3005` | Notification service |
 | `http://127.0.0.1:15672` | RabbitMQ Management (guest/guest) |
 
 ## Public gateway API surface
@@ -126,6 +132,8 @@ docker compose -f docker-compose.dev.yaml up -d
 - `POST /auth/sign-in`
 - `GET /auth/refresh`
 - `GET /auth/users?page=&onPage=`
+- `POST /auth/reset-password`
+- `POST /auth/reset-password/confirm`
 
 ### Chat routes
 
@@ -169,6 +177,22 @@ Identity utility:
 
 - Backend e2e tests use `services/docker-compose.test.yaml`.
 - Analytics currently has no unit tests configured, so `npm run test` may exit non-zero when no tests are discovered.
+
+## Notification service configuration
+
+The notification service sends emails via SMTP. Configure it in `services/notification/env/.env.*`.
+
+| Variable | Description |
+| --- | --- |
+| `SMTP_PREVIEW` | Set to `true` to use Ethereal (fake SMTP) and log preview URLs — no credentials needed |
+| `SMTP_HOST` | SMTP server hostname (e.g. `smtp.resend.com`) |
+| `SMTP_PORT` | SMTP port (e.g. `465` for TLS, `587` for STARTTLS) |
+| `SMTP_SECURE` | `true` for port 465, `false` for 587 |
+| `SMTP_USER` | SMTP username (e.g. `resend` for Resend) |
+| `SMTP_PASS` | SMTP password or API key |
+| `SMTP_FROM` | Sender address (e.g. `DASI <no-reply@yourdomain.com>`) |
+
+For local development without a domain, set `SMTP_PREVIEW=true` or use Resend with `SMTP_FROM=DASI <onboarding@resend.dev>` (emails will only be delivered to the Resend account owner's address).
 
 ## Additional documentation
 

@@ -2,6 +2,7 @@
 
 import { type FormEvent, useState } from "react"
 import { ArrowRight, Eye, EyeOff } from "lucide-react"
+import Link from "next/link"
 import { toast } from "sonner"
 
 import {
@@ -160,6 +161,13 @@ export function SignInForm() {
           </>
         )}
       </Button>
+
+      <Link
+        href="/forgot-password"
+        className="flex h-12 w-full items-center justify-center rounded-2xl border border-border/70 bg-background/90 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+      >
+        Forgot password?
+      </Link>
 
       <p className="text-center text-xs leading-5 text-muted-foreground">
         Protected by the identity service and routed through the gateway before you enter chat.

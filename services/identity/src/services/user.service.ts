@@ -36,4 +36,8 @@ export class UserService {
     const objects = users.map((user) => UserDto.fromEntity(user));
     return new ListDto<UserDto>(objects, total, onPage);
   }
+
+  updatePassword(id: number, hashedPassword: string) {
+    return this.repo.update(id, { password: hashedPassword });
+  }
 }
