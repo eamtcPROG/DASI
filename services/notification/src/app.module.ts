@@ -8,7 +8,10 @@ import { NotificationService } from './notification/notification.service';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: `${process.cwd()}/env/.env.${process.env.NODE_ENV}`,
+      envFilePath: [
+        `${process.cwd()}/env/.env.secrets`,
+        `${process.cwd()}/env/.env.${process.env.NODE_ENV}`,
+      ],
       load: [configuration],
     }),
   ],

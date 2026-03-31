@@ -110,6 +110,34 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  notification:
+    <<: *app-service
+    container_name: notification
+    image: europe-central2-docker.pkg.dev/dasi-491416/dasi/notification:latest
+    env_file:
+      - ./notification/env/.env.production
+      - path: ./notification/env/.env.secrets
+        required: false
+    ports:
+      - ${NOTIFICATION_PORT:-3005}:3005
+    environment:
+      NODE_ENV: production
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:3005/',res=>process.exit(res.statusCode < 500 ? 0 : 1)).on('error',()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 25s
+
   analytics:
     <<: *app-service
     container_name: analytics-service
