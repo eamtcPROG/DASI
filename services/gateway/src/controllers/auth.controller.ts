@@ -52,9 +52,7 @@ export class AuthController {
     if (!body.email || !body.password) {
       throw new BadRequestException("Email and password are required");
     }
-
-    const result = await this.authProxyService.signUp(body);
-    return result;
+    return await this.authProxyService.signUp(body);
   }
 
   @Public()
@@ -93,6 +91,51 @@ export class AuthController {
   @Get("refresh")
   refresh(@CurrentUser() user: AuthenticatedUser | undefined) {
     return this.authProxyService.refreshToken(user?.token ?? "");
+  }
+
+  @Public()
+  @ApiOperation({ summary: "Request a password reset code via email" })
+  @ApiBody({
+    schema: { properties: { email: { type: "string" } }, required: ["email"] },
+  })
+  @ApiOkResponse({ description: "Reset code sent if account exists" })
+  @Post("reset-password")
+  @HttpCode(HttpStatus.OK)
+  async requestPasswordReset(@Body() body: { email: string }) {
+    if (!body.email) {
+      throw new BadRequestException("Email is required");
+    }
+    return this.authProxyService.requestPasswordReset(body.email);
+  }
+
+  @Public()
+  @ApiOperation({ summary: "Confirm password reset with the 6-digit code" })
+  @ApiBody({
+    schema: {
+      properties: {
+        email: { type: "string" },
+        code: { type: "string" },
+        newPassword: { type: "string" },
+      },
+      required: ["email", "code", "newPassword"],
+    },
+  })
+  @ApiOkResponse({ description: "Password updated successfully" })
+  @Post("reset-password/confirm")
+  @HttpCode(HttpStatus.OK)
+  async confirmPasswordReset(
+    @Body() body: { email: string; code: string; newPassword: string },
+  ) {
+    if (!body.email || !body.code || !body.newPassword) {
+      throw new BadRequestException(
+        "Email, code, and newPassword are required",
+      );
+    }
+    return this.authProxyService.confirmPasswordReset(
+      body.email,
+      body.code,
+      body.newPassword,
+    );
   }
 
   @ApiOperation({ summary: "Get a list of users" })

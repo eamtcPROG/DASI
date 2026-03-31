@@ -127,7 +127,7 @@ export class UserController {
 
   @ApiOperation({ summary: 'Get user IDs by emails' })
   @ApiConsumes('application/json')
-  @ApiBody({ 
+  @ApiBody({
     type: 'object',
     schema: {
       type: 'object',
@@ -135,10 +135,10 @@ export class UserController {
         emails: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Array of email addresses'
-        }
-      }
-    }
+          description: 'Array of email addresses',
+        },
+      },
+    },
   })
   @ApiOkResponse({
     type: ResultObjectDto<{ [email: string]: number }>,
@@ -149,7 +149,7 @@ export class UserController {
   @Post('/lookup-emails')
   async lookupEmails(@Body() body: { emails: string[] }) {
     const result: { [email: string]: number } = {};
-    
+
     for (const email of body.emails) {
       const users = await this.userService.findByEmail(email);
       const user = users[0]; // Get first user found
@@ -157,7 +157,7 @@ export class UserController {
         result[email] = user.id;
       }
     }
-    
+
     return new ResultObjectDto(result, false, 200);
   }
 }

@@ -6,6 +6,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+
 import {
   Ctx,
   MessagePattern,
@@ -22,6 +23,8 @@ import { SignInDto } from 'src/dto/sign-in.dto';
 import { UserDto } from 'src/dto/user.dto';
 import { AuthService } from 'src/services/auth.service';
 import { UserService } from 'src/services/user.service';
+
+type RmqChannel = { ack(message: unknown): void };
 
 type RefreshTokenRequest = {
   token: string;
@@ -49,8 +52,8 @@ export class IdentityEventController {
     @Payload() data: CreateUserDto,
     @Ctx() context: RmqContext,
   ): Promise<ResultObjectDto<AuthDto | null>> {
-    const channel = context.getChannelRef();
-    const originalMsg = context.getMessage();
+    const channel = context.getChannelRef() as RmqChannel;
+    const originalMsg = context.getMessage() as unknown;
 
     try {
       const auth = await this.authService.signUp(data);
@@ -67,8 +70,8 @@ export class IdentityEventController {
     @Payload() data: SignInDto,
     @Ctx() context: RmqContext,
   ): Promise<ResultObjectDto<AuthDto | null>> {
-    const channel = context.getChannelRef();
-    const originalMsg = context.getMessage();
+    const channel = context.getChannelRef() as RmqChannel;
+    const originalMsg = context.getMessage() as unknown;
 
     try {
       const auth = await this.authService.signIn(data);
@@ -85,19 +88,24 @@ export class IdentityEventController {
     @Payload() data: RefreshTokenRequest,
     @Ctx() context: RmqContext,
   ): Promise<ResultObjectDto<AuthDto | null>> {
-    const channel = context.getChannelRef();
-    const originalMsg = context.getMessage();
+    const channel = context.getChannelRef() as RmqChannel;
+    const originalMsg = context.getMessage() as unknown;
 
     try {
       if (!data?.token) {
-        throw new UnauthorizedException('Invalid or missing token');
+        return this.toErrorResult(
+          new UnauthorizedException('Invalid or missing token'),
+        );
       }
 
-      const payload =
-        await this.jwtService.verifyAsync<AuthTokenPayload>(data.token);
+      const payload = await this.jwtService.verifyAsync<AuthTokenPayload>(
+        data.token,
+      );
       const users = await this.userService.findByEmail(payload.email);
       if (!users[0]) {
-        throw new UnauthorizedException('Invalid or missing token');
+        return this.toErrorResult(
+          new UnauthorizedException('Invalid or missing token'),
+        );
       }
 
       const auth = await this.authService.refreshToken(users[0]);
@@ -114,13 +122,16 @@ export class IdentityEventController {
     @Payload() data: UserListRequest,
     @Ctx() context: RmqContext,
   ): Promise<ResultListDto<UserDto>> {
-    const channel = context.getChannelRef();
-    const originalMsg = context.getMessage();
+    const channel = context.getChannelRef() as RmqChannel;
+    const originalMsg = context.getMessage() as unknown;
 
     try {
       const page = data?.page && data.page > 0 ? data.page : 1;
       const onPage = data?.onPage && data.onPage > 0 ? data.onPage : 10;
-      const users: ListDto<UserDto> = await this.userService.getList(page, onPage);
+      const users: ListDto<UserDto> = await this.userService.getList(
+        page,
+        onPage,
+      );
       return new ResultListDto(
         users.objects,
         users.total,
@@ -129,14 +140,9 @@ export class IdentityEventController {
         HttpStatus.OK,
       );
     } catch (error) {
-      return new ResultListDto(
-        [],
-        0,
-        0,
-        true,
-        this.extractStatus(error),
-        [new MessageDto(this.extractMessage(error), MessageType.ERROR)],
-      );
+      return new ResultListDto([], 0, 0, true, this.extractStatus(error), [
+        new MessageDto(this.extractMessage(error), MessageType.ERROR),
+      ]);
     } finally {
       channel.ack(originalMsg);
     }
@@ -147,37 +153,79 @@ export class IdentityEventController {
     @Payload() data: UsersByIdsRequest,
     @Ctx() context: RmqContext,
   ): Promise<ResultObjectDto<UserDto[]>> {
-    const channel = context.getChannelRef();
-    const originalMsg = context.getMessage();
+    const channel = context.getChannelRef() as RmqChannel;
+    const originalMsg = context.getMessage() as unknown;
 
     try {
       if (!data?.userIds || !Array.isArray(data.userIds)) {
-        throw new BadRequestException('User IDs array is required');
+        return new ResultObjectDto([], true, HttpStatus.BAD_REQUEST, [
+          new MessageDto('User IDs array is required', MessageType.ERROR),
+        ]);
       }
 
       const users = await this.userService.findByIds(data.userIds);
       return new ResultObjectDto(users, false, HttpStatus.OK);
     } catch (error) {
-      return new ResultObjectDto(
-        [],
-        true,
-        this.extractStatus(error),
-        [new MessageDto(this.extractMessage(error), MessageType.ERROR)],
-      );
+      return new ResultObjectDto([], true, this.extractStatus(error), [
+        new MessageDto(this.extractMessage(error), MessageType.ERROR),
+      ]);
     } finally {
       channel.ack(originalMsg);
     }
   }
 
-  private toErrorResult(
-    error: unknown,
-  ): ResultObjectDto<AuthDto | null> {
-    return new ResultObjectDto<AuthDto | null>(
-      null,
-      true,
-      this.extractStatus(error),
-      [new MessageDto(this.extractMessage(error), MessageType.ERROR)],
-    );
+  @MessagePattern('request_password_reset')
+  async handleRequestPasswordReset(
+    @Payload() data: { email: string },
+    @Ctx() context: RmqContext,
+  ): Promise<ResultObjectDto<null>> {
+    const channel = context.getChannelRef() as RmqChannel;
+    const originalMsg = context.getMessage() as unknown;
+
+    try {
+      if (!data?.email) {
+        return this.toErrorResult(new BadRequestException('Email is required'));
+      }
+      await this.authService.requestPasswordReset(data.email);
+      return new ResultObjectDto(null, false, HttpStatus.OK);
+    } catch (error) {
+      return this.toErrorResult(error);
+    } finally {
+      channel.ack(originalMsg);
+    }
+  }
+
+  @MessagePattern('confirm_password_reset')
+  async handleConfirmPasswordReset(
+    @Payload() data: { email: string; code: string; newPassword: string },
+    @Ctx() context: RmqContext,
+  ): Promise<ResultObjectDto<null>> {
+    const channel = context.getChannelRef() as RmqChannel;
+    const originalMsg = context.getMessage() as unknown;
+
+    try {
+      if (!data?.email || !data?.code || !data?.newPassword) {
+        return this.toErrorResult(
+          new BadRequestException('Email, code, and newPassword are required'),
+        );
+      }
+      await this.authService.confirmPasswordReset(
+        data.email,
+        data.code,
+        data.newPassword,
+      );
+      return new ResultObjectDto(null, false, HttpStatus.OK);
+    } catch (error) {
+      return this.toErrorResult(error);
+    } finally {
+      channel.ack(originalMsg);
+    }
+  }
+
+  private toErrorResult(error: unknown): ResultObjectDto<null> {
+    return new ResultObjectDto<null>(null, true, this.extractStatus(error), [
+      new MessageDto(this.extractMessage(error), MessageType.ERROR),
+    ]);
   }
 
   private extractStatus(error: unknown): number {
@@ -197,7 +245,8 @@ export class IdentityEventController {
 
       if (typeof response === 'object' && response !== null) {
         const payload = response as Record<string, unknown>;
-        const extracted = payload['message'] ?? payload['error'] ?? error.message;
+        const extracted =
+          payload['message'] ?? payload['error'] ?? error.message;
         if (Array.isArray(extracted)) {
           return extracted.map((message) => String(message)).join(', ');
         }

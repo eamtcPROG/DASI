@@ -2,8 +2,7 @@
 /dist
 /node_modules
 /build
-node_modules
-dist 
+
 # Logs
 logs
 *.log
@@ -41,6 +40,9 @@ lerna-debug.log*
 .env.production.local
 .env.local
 
+# secrets — never commit real credentials
+env/.env.secrets
+
 # temp directory
 .temp
 .tmp
@@ -55,5 +57,3 @@ pids
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 .vscode
-
-package-lock.json

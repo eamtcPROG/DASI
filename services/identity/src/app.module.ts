@@ -11,6 +11,7 @@ import { UserService } from './services/user.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { UserController } from './controllers/user.controller';
 import { User } from './models/user.model';
+import { PasswordResetCode } from './models/password-reset-code.model';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthEventController } from './events/auth.event.controller';
 import { IdentityEventController } from './events/identity.event.controller';
@@ -39,11 +40,11 @@ function getRequiredConfig(config: ConfigService, key: string): string {
           password: config.get<string>('database.password'),
           database: config.get<string>('database.database'),
           synchronize: true,
-          entities: [User],
+          entities: [User, PasswordResetCode],
         };
       },
     }),
-    TypeOrmModule.forFeature([User]),
+    TypeOrmModule.forFeature([User, PasswordResetCode]),
     ClientsModule.registerAsync([
       {
         name: 'ANALYTICS_SERVICE',
@@ -54,6 +55,21 @@ function getRequiredConfig(config: ConfigService, key: string): string {
           options: {
             urls: [getRequiredConfig(config, 'rabbitmq.url')],
             queue: config.get<string>('rabbitmq.analyticsQueue') ?? 'analytics',
+            queueOptions: { durable: true },
+          },
+        }),
+      },
+      {
+        name: 'NOTIFICATION_SERVICE',
+        imports: [ConfigModule],
+        inject: [ConfigService],
+        useFactory: (config: ConfigService) => ({
+          transport: Transport.RMQ,
+          options: {
+            urls: [getRequiredConfig(config, 'rabbitmq.url')],
+            queue:
+              config.get<string>('rabbitmq.notificationQueue') ??
+              'notification',
             queueOptions: { durable: true },
           },
         }),
