@@ -16,6 +16,41 @@ export class ChatService {
   ) {}
 
   /**
+   * Latest message per room (by max id among non-deleted), for sidebar preview.
+   */
+  private async getLatestMessagesForRooms(
+    roomIds: number[],
+  ): Promise<Map<number, { content: string; created_at: Date }>> {
+    const map = new Map<number, { content: string; created_at: Date }>();
+    if (roomIds.length === 0) {
+      return map;
+    }
+
+    const inner = this.messageRepository
+      .createQueryBuilder("m2")
+      .select("m2.room_id", "room_id")
+      .addSelect("MAX(m2.id)", "max_id")
+      .where("m2.is_deleted = :d", { d: false })
+      .andWhere("m2.room_id IN (:...roomIds)", { roomIds })
+      .groupBy("m2.room_id");
+
+    const messages = await this.messageRepository
+      .createQueryBuilder("m")
+      .innerJoin(
+        "(" + inner.getQuery() + ")",
+        "t",
+        "m.room_id = t.room_id AND m.id = t.max_id",
+      )
+      .setParameters(inner.getParameters())
+      .getMany();
+
+    for (const m of messages) {
+      map.set(m.room_id, { content: m.content, created_at: m.created_at });
+    }
+    return map;
+  }
+
+  /**
    * Get rooms where a user is a member (not banned)
    */
   async getUserRooms(userId: number): Promise<RoomDto[]> {
@@ -27,11 +62,21 @@ export class ChatService {
       relations: ["room"],
     });
 
-    return roomMembers.map((roomMember) => ({
-      id: roomMember.room.id,
-      name: roomMember.room.name,
-      description: roomMember.room.description,
-    }));
+    const roomIds: number[] = [
+      ...new Set(roomMembers.map((rm) => rm.room_id as number)),
+    ];
+    const latestByRoom = await this.getLatestMessagesForRooms(roomIds);
+
+    return roomMembers.map((roomMember) => {
+      const latest = latestByRoom.get(roomMember.room_id);
+      return {
+        id: roomMember.room.id,
+        name: roomMember.room.name,
+        description: roomMember.room.description,
+        lastMessage: latest?.content ?? null,
+        lastMessageAt: latest?.created_at?.toISOString() ?? null,
+      };
+    });
   }
 
   /**
@@ -87,10 +132,10 @@ export class ChatService {
    * Get chat history for a specific room
    */
   async getRoomHistory(roomId: number): Promise<Message[]> {
+    // No relations: avoids bloated payloads and JSON cycles over RabbitMQ.
     return this.messageRepository.find({
       where: { room_id: roomId, is_deleted: false },
       order: { created_at: "ASC" },
-      relations: ["room"],
     });
   }
 
@@ -198,20 +243,17 @@ export class ChatService {
       joined_at: new Date(),
     });
 
-    // Add other members (if any)
-    if (data.memberEmails && data.memberEmails.length > 0) {
-      // Note: memberEmails should already be resolved to user IDs by the gateway
-      // For now, we'll just add them as members with the provided IDs
-      if (data.memberUserIds && data.memberUserIds.length > 0) {
-        for (const userId of data.memberUserIds) {
-          await this.roomMemberRepository.save({
-            room_id: savedRoom.id,
-            user_id: userId,
-            role: 1, // Regular member
-            joined_at: new Date(),
-          });
-        }
-      }
+    // Add other members by resolved IDs (gateway is source of truth; do not gate on memberEmails).
+    const inviteeIds = [...new Set(data.memberUserIds ?? [])].filter(
+      (id) => id !== data.creatorId,
+    );
+    for (const userId of inviteeIds) {
+      await this.roomMemberRepository.save({
+        room_id: savedRoom.id,
+        user_id: userId,
+        role: 1, // Regular member
+        joined_at: new Date(),
+      });
     }
 
     return {

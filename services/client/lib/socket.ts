@@ -44,17 +44,22 @@ function getSocketBaseUrl(): string {
 let socket: Socket | null = null
 
 export function getSocket(token: string): Socket {
+  const baseUrl = getSocketBaseUrl()
+
   if (socket?.connected) {
-    console.log("Socket already connected, reusing existing connection")
+    socket.auth = { token }
     return socket
   }
 
+  // Reuse the same instance while a handshake is in progress or the client is
+  // reconnecting. Creating a new Socket on every getSocket() call during that
+  // window disconnects the previous one — listeners stay on the dead instance,
+  // so chat:history and other events are never received.
   if (socket) {
-    console.log("Socket exists but not connected, disconnecting and creating new one")
-    socket.disconnect()
+    socket.auth = { token }
+    return socket
   }
 
-  const baseUrl = getSocketBaseUrl()
   console.log("Creating new socket connection to:", baseUrl)
 
   socket = io(baseUrl, {
@@ -68,21 +73,20 @@ export function getSocket(token: string): Socket {
     randomizationFactor: 0.5,
   })
 
-  // Add connection event logging
-  socket.on('connect', () => {
-    console.log('Socket connected successfully!', socket?.id)
+  socket.on("connect", () => {
+    console.log("Socket connected successfully!", socket?.id)
   })
 
-  socket.on('disconnect', (reason) => {
-    console.log('Socket disconnected:', reason)
+  socket.on("disconnect", (reason) => {
+    console.log("Socket disconnected:", reason)
   })
 
-  socket.on('connect_error', (error) => {
-    console.error('Socket connection error:', error.message)
+  socket.on("connect_error", (error) => {
+    console.error("Socket connection error:", error.message)
   })
 
-  socket.on('reconnect', (attemptNumber) => {
-    console.log('Socket reconnected after', attemptNumber, 'attempts')
+  socket.on("reconnect", (attemptNumber) => {
+    console.log("Socket reconnected after", attemptNumber, "attempts")
   })
 
   return socket

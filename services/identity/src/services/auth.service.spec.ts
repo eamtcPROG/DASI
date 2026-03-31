@@ -9,6 +9,8 @@ import { User } from '../models/user.model';
 import { AuthDto } from '../dto/auth.dto';
 import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { genSalt, hash, compare } from 'bcrypt';
+import { ClientProxy } from '@nestjs/microservices';
+import { of } from 'rxjs';
 
 jest.mock('bcrypt', () => ({
   genSalt: jest.fn().mockResolvedValue('salt'),
@@ -20,6 +22,7 @@ describe('AuthService', () => {
   let authService: AuthService;
   let userService: jest.Mocked<UserService>;
   let jwtService: jest.Mocked<JwtService>;
+  let analyticsClient: jest.Mocked<Pick<ClientProxy, 'emit'>>;
 
   const fakeToken = 'fake-jwt';
   const testUser: User = {
@@ -39,18 +42,23 @@ describe('AuthService', () => {
       signAsync: jest.fn().mockResolvedValue(fakeToken),
       decode: jest.fn(),
     };
+    const mockAnalyticsClient = {
+      emit: jest.fn().mockReturnValue(of(true)),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
         { provide: UserService, useValue: mockUserService },
         { provide: JwtService, useValue: mockJwtService },
+        { provide: 'ANALYTICS_SERVICE', useValue: mockAnalyticsClient },
       ],
     }).compile();
 
     authService = module.get<AuthService>(AuthService);
     userService = module.get(UserService);
     jwtService = module.get(JwtService);
+    analyticsClient = module.get('ANALYTICS_SERVICE');
 
     (compare as jest.Mock<Promise<boolean>>).mockResolvedValue(true);
   });
@@ -136,6 +144,14 @@ describe('AuthService', () => {
       });
       expect(result.access_token).toBe(fakeToken);
       expect(result.user).toEqual(UserDto.fromEntity(createdUser));
+      expect(analyticsClient.emit).toHaveBeenCalledWith('analytics.event', {
+        event: 'user.created',
+        data: expect.objectContaining({
+          userId: createdUser.id,
+          email: createdUser.email,
+          createdAt: expect.any(String),
+        }),
+      });
     });
   });
 
