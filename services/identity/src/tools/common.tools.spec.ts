@@ -6,7 +6,9 @@ describe('common.tools', () => {
       expect(getJwtFromRequest()).toBeNull();
       expect(getJwtFromRequest({})).toBeNull();
       expect(
-        getJwtFromRequest({ headers: { authorization: 1 as unknown as string } }),
+        getJwtFromRequest({
+          headers: { authorization: 1 as unknown as string },
+        }),
       ).toBeNull();
     });
 
@@ -24,7 +26,9 @@ describe('common.tools', () => {
         getJwtFromRequest({ headers: { authorization: 'Bearer my-token' } }),
       ).toBe('my-token');
       expect(
-        getJwtFromRequest({ headers: { authorization: 'bearer lowercase-token' } }),
+        getJwtFromRequest({
+          headers: { authorization: 'bearer lowercase-token' },
+        }),
       ).toBe('lowercase-token');
     });
   });
@@ -34,7 +38,9 @@ describe('common.tools', () => {
       const nowMs = Date.now();
       const timestamp = getTimestamp();
 
-      expect(timestamp).toBeGreaterThanOrEqual(Math.floor((nowMs - 1000) / 1000));
+      expect(timestamp).toBeGreaterThanOrEqual(
+        Math.floor((nowMs - 1000) / 1000),
+      );
       expect(timestamp).toBeLessThanOrEqual(Math.floor((nowMs + 1000) / 1000));
       expect(Number.isInteger(timestamp)).toBe(true);
     });
