@@ -144,6 +144,16 @@ export class RealtimeGateway
     emails: string[],
     token?: string,
   ): Promise<number[]> {
+    const normalized = [
+      ...new Set(
+        emails.map((e) => e.trim().toLowerCase()).filter((e) => e.length > 0),
+      ),
+    ];
+
+    if (normalized.length === 0) {
+      return [];
+    }
+
     const identityResponse = await fetch(
       `${this.identityServiceUrl}/user/lookup-emails`,
       {
@@ -152,7 +162,7 @@ export class RealtimeGateway
           "Content-Type": "application/json",
           ...(this.getAuthHeaders(token) ?? {}),
         },
-        body: JSON.stringify({ emails }),
+        body: JSON.stringify({ emails: normalized }),
       },
     );
 
@@ -164,9 +174,17 @@ export class RealtimeGateway
       object?: Record<string, number>;
     };
 
-    return Object.values(identityResult.object ?? {}).filter(
-      (userId): userId is number => true,
-    );
+    const map = identityResult.object ?? {};
+    const ids: number[] = [];
+    for (const email of normalized) {
+      const id = map[email];
+      if (typeof id !== "number") {
+        throw new Error(`No user registered for email: ${email}`);
+      }
+      ids.push(id);
+    }
+
+    return [...new Set(ids)];
   }
 
   private getFallbackUser(userId: number): UserDto {
@@ -228,37 +246,45 @@ export class RealtimeGateway
         roomId: payload.roomId,
       });
 
-      // Enrich messages with user information
-      if (response && response.object && Array.isArray(response.object)) {
-        const messages = response.object as ChatMessage[];
-
-        // Get unique user IDs from messages
-        const userIds = [...new Set(messages.map((msg) => msg.user_id))];
-
-        // Fetch user information from Identity service
-        const userMap = new Map<number, UserDto>();
-        for (const userId of userIds) {
-          try {
-            const user = await this.fetchIdentityUser(userId, token);
-            if (user) {
-              userMap.set(userId, user);
-            }
-          } catch (error) {
-            console.error(`Failed to fetch user ${userId}:`, error);
-          }
-        }
-
-        // Attach user information to messages
-        const enrichedMessages: ChatMessageWithUser[] = messages.map((msg) => ({
-          ...msg,
-          user: userMap.get(msg.user_id) ?? this.getFallbackUser(msg.user_id),
-        }));
-
-        client.emit("chat:history", {
-          roomId: payload.roomId,
-          messages: enrichedMessages,
-        });
+      const raw = response?.object;
+      const messages: ChatMessage[] = Array.isArray(raw)
+        ? (raw as ChatMessage[])
+        : [];
+      if (raw != null && !Array.isArray(raw)) {
+        console.warn(
+          "chat:join_room: expected messages array from chat service, got",
+          typeof raw,
+        );
       }
+      if (response?.error) {
+        console.warn(
+          "chat:join_room: chat service returned error flag for messages",
+          payload.roomId,
+        );
+      }
+
+      const userIds = [...new Set(messages.map((msg) => msg.user_id))];
+      const userMap = new Map<number, UserDto>();
+      for (const userId of userIds) {
+        try {
+          const user = await this.fetchIdentityUser(userId, token);
+          if (user) {
+            userMap.set(userId, user);
+          }
+        } catch (error) {
+          console.error(`Failed to fetch user ${userId}:`, error);
+        }
+      }
+
+      const enrichedMessages: ChatMessageWithUser[] = messages.map((msg) => ({
+        ...msg,
+        user: userMap.get(msg.user_id) ?? this.getFallbackUser(msg.user_id),
+      }));
+
+      client.emit("chat:history", {
+        roomId: payload.roomId,
+        messages: enrichedMessages,
+      });
     } catch (error) {
       console.error("Error in chat:join_room:", error);
       client.emit("chat:error", { message: "Failed to join room" });

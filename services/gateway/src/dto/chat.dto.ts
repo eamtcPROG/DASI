@@ -13,6 +13,22 @@ export class RoomDto {
     required: false,
   })
   description: string | null;
+
+  @ApiProperty({
+    example: "Hello!",
+    description: "Latest non-deleted message preview",
+    required: false,
+    nullable: true,
+  })
+  lastMessage?: string | null;
+
+  @ApiProperty({
+    example: "2026-03-29T12:00:00.000Z",
+    description: "ISO time of latest message",
+    required: false,
+    nullable: true,
+  })
+  lastMessageAt?: string | null;
 }
 
 export class UserRoomsRequestDto {

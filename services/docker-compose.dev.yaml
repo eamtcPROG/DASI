@@ -10,7 +10,6 @@ services:
   client:
     <<: *app-service
     container_name: client
-    image: europe-central2-docker.pkg.dev/dasi-491416/dasi/client:latest
     environment:
       NODE_ENV: production
       PORT: 3000
@@ -38,7 +37,6 @@ services:
   gateway:
     <<: *app-service
     container_name: gateway
-    image: europe-central2-docker.pkg.dev/dasi-491416/dasi/gateway:latest
     env_file:
       - ./gateway/env/.env.production
     ports:
@@ -69,7 +67,6 @@ services:
   identity:
     <<: *app-service
     container_name: identity
-    image: europe-central2-docker.pkg.dev/dasi-491416/dasi/identity:latest
     env_file:
       - ./identity/env/.env.production
     ports:
@@ -97,7 +94,6 @@ services:
   chat:
     <<: *app-service
     container_name: chat
-    image: europe-central2-docker.pkg.dev/dasi-491416/dasi/chat:latest
     env_file:
       - ./chat/env/.env.production
     ports:
@@ -110,10 +106,36 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  notification:
+    <<: *app-service
+    container_name: notification
+    env_file:
+      - ./notification/env/.env.production
+      - path: ./notification/env/.env.secrets
+        required: false
+    ports:
+      - ${NOTIFICATION_PORT:-3005}:3005
+    environment:
+      NODE_ENV: production
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:3005/',res=>process.exit(res.statusCode < 500 ? 0 : 1)).on('error',()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 25s
+
   analytics:
     <<: *app-service
     container_name: analytics-service
-    image: europe-central2-docker.pkg.dev/dasi-491416/dasi/analytics:latest
     env_file:
       - ./analytics/env/.env.production
     ports:

@@ -40,8 +40,65 @@ type Chat = {
   status: string
   role: string
   pinned: boolean
+  description?: string
+  /** For ordering the list by latest activity (message time or room created). */
+  lastActivityAt?: number
 }
 
+function formatSidebarTime(iso: string | null | undefined): string {
+  if (!iso) return ""
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ""
+  return d.toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  })
+}
+
+/** Map gateway /chat/rooms entry to sidebar row. */
+function mapApiRoomToChat(room: {
+  id: number | string
+  name: string
+  description?: string
+  lastMessage?: string | null
+  lastMessageAt?: string | null
+}): Chat {
+  const lastAt = room.lastMessageAt
+  const lastMs = lastAt ? new Date(lastAt).getTime() : NaN
+  return {
+    id: String(room.id),
+    name: room.name,
+    lastMessage: room.lastMessage ?? "",
+    time: formatSidebarTime(room.lastMessageAt),
+    unread: 0,
+    status: "Offline",
+    role: "",
+    description: room.description,
+    pinned: false,
+    lastActivityAt: Number.isFinite(lastMs) ? lastMs : undefined,
+  }
+}
+
+/**
+ * Merge API rooms with existing UI state so a slow initial /chat/rooms response
+ * cannot wipe a room we already added via chat:room_created / chat:room_invitation.
+ */
+function mergeChatsFromApi(
+  apiRooms: Array<{
+    id: number | string
+    name: string
+    description?: string
+    lastMessage?: string | null
+    lastMessageAt?: string | null
+  }>,
+  prev: Chat[],
+): Chat[] {
+  const fromApi = apiRooms.map(mapApiRoomToChat)
+  const apiIds = new Set(fromApi.map((c) => c.id))
+  const preserved = prev.filter((c) => !apiIds.has(c.id))
+  return [...preserved, ...fromApi]
+}
 
 type ChatPageProps = {
   user: UserDto
@@ -57,6 +114,10 @@ export function ChatPage({ user, token }: ChatPageProps) {
   const [showMembersModal, setShowMembersModal] = useState(false)
   const [allUsers, setAllUsers] = useState<UserDto[]>([])
   const typingTimeouts = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map())
+  const chatsRef = useRef<Chat[]>([])
+  chatsRef.current = chats
+  const selectedChatRef = useRef<string | null>(null)
+  selectedChatRef.current = selectedChat
 
   useEffect(() => {
     const loadUserRooms = async () => {
@@ -67,23 +128,15 @@ export function ChatPage({ user, token }: ChatPageProps) {
         
         const rooms = data?.object ?? []
 
-        setChats(
-          rooms.map((room: any) => ({
-            id: String(room.id),
-            name: room.name,
-            lastMessage: "",
-            time: "",
-            unread: 0,
-            status: "Offline",
-            description: room.description,
-            pinned: false,
-          }))
-        )
-        
-        // Automatically select the first room if none is selected
-        if (rooms.length > 0 && !selectedChat) {
-          setSelectedChat(String(rooms[0].id))
-        }
+        setChats((prev) => mergeChatsFromApi(rooms, prev))
+
+        // Select first room only if user still has none (avoid stale closure overwriting choice)
+        setSelectedChat((current) => {
+          if (rooms.length > 0 && !current) {
+            return String(rooms[0].id)
+          }
+          return current
+        })
       } catch (error) {
         console.error("❌ Error loading user rooms:", error)
       }
@@ -107,28 +160,24 @@ export function ChatPage({ user, token }: ChatPageProps) {
     loadUsers()
   }, [user.id])
 
-  // Auto-load room history when selected chat changes
-  useEffect(() => {
-    if (selectedChat) {
-      const socket = getSocket(token)
-      // Emit join room event to load history
-      socket.emit("chat:join_room", { roomId: Number(selectedChat) })
-    }
-  }, [selectedChat, token])
-
-  // Auto-join all rooms to receive real-time messages
+  // Register Socket.IO listeners BEFORE any chat:join_room emits (same render cycle on token
+  // change, or a fast WebSocket can deliver chat:history before handlers exist).
   useEffect(() => {
     const socket = getSocket(token)
-    if (chats.length > 0) {
-      chats.forEach(chat => {
-        socket.emit("chat:join_room", { roomId: Number(chat.id) })
-      })
-    }
-  }, [chats, token])
 
-  useEffect(() => {
-    // Connect to WebSocket immediately when page loads
-    const socket = getSocket(token)
+    const requestJoins = () => {
+      const sock = getSocket(token)
+      const sel = selectedChatRef.current
+      if (sel) {
+        sock.emit("chat:join_room", { roomId: Number(sel) })
+      }
+      for (const c of chatsRef.current) {
+        sock.emit("chat:join_room", { roomId: Number(c.id) })
+      }
+    }
+
+    socket.on("connect", requestJoins)
+    socket.on("reconnect", requestJoins)
 
     socket.on("chat:new_message", (data) => {
       const { roomId, message } = data
@@ -156,14 +205,17 @@ export function ChatPage({ user, token }: ChatPageProps) {
         [chatId]: [...(prev[chatId] ?? []), newMessage],
       }))
 
+      const msgTs = new Date(message.created_at).getTime()
       setChats((prev) =>
         prev.map((chat) =>
           chat.id === chatId
-            ? { 
-                ...chat, 
-                lastMessage: message.content, 
-                time: "Now", 
-                unread: selectedChatRef.current === chatId ? chat.unread : chat.unread + 1 
+            ? {
+                ...chat,
+                lastMessage: message.content,
+                time: "Now",
+                lastActivityAt: Number.isFinite(msgTs) ? msgTs : Date.now(),
+                unread:
+                  selectedChatRef.current === chatId ? chat.unread : chat.unread + 1,
               }
             : chat,
         ),
@@ -171,61 +223,110 @@ export function ChatPage({ user, token }: ChatPageProps) {
     })
 
     socket.on("chat:history", (data) => {
-      const { roomId, messages: historyMessages } = data
+      const { roomId, messages: historyMessages } = data ?? {}
       const chatId = String(roomId)
-      
-      const formattedMessages = historyMessages.map((msg: any) => ({
-        id: String(msg.id),
-        content: msg.content,
-        time: new Date(msg.created_at).toLocaleTimeString("en-US", {
+      const list = Array.isArray(historyMessages) ? historyMessages : []
+
+      setMessages((prev) => {
+        const existing = prev[chatId] ?? []
+        // Duplicate join_room runs (e.g. when `chats` updates) must not wipe the
+        // thread with an empty payload if we already showed history or optimistic sends.
+        if (list.length === 0 && existing.length > 0) {
+          return prev
+        }
+
+        const formattedMessages = list.map((msg: any) => ({
+          id: String(msg.id),
+          content: msg.content,
+          time: new Date(msg.created_at).toLocaleTimeString("en-US", {
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+          }),
+          sent: msg.user_id === user.id,
+          read: false,
+          senderName:
+            msg.user_id === user.id
+              ? undefined
+              : msg.user?.firstName && msg.user?.lastName
+                ? `${msg.user.firstName} ${msg.user.lastName}`
+                : msg.user?.firstName ||
+                  msg.user?.lastName ||
+                  msg.user?.email ||
+                  `User ${msg.user_id}`,
+          senderId: msg.user_id,
+        }))
+
+        return {
+          ...prev,
+          [chatId]: formattedMessages,
+        }
+      })
+
+      // Sidebar preview: show the latest message in the thread (history is ordered ASC).
+      if (list.length > 0) {
+        const last = list[list.length - 1] as {
+          content: string
+          created_at: string
+        }
+        const lastTs = new Date(last.created_at).getTime()
+        const timeStr = new Date(last.created_at).toLocaleTimeString("en-US", {
           hour: "2-digit",
           minute: "2-digit",
           hour12: false,
-        }),
-        sent: msg.user_id === user.id,
-        read: false,
-        senderName: msg.user_id === user.id ? undefined : (
-          msg.user?.firstName && msg.user?.lastName 
-            ? `${msg.user.firstName} ${msg.user.lastName}`
-            : msg.user?.firstName || msg.user?.lastName || msg.user?.email || `User ${msg.user_id}`
-        ),
-        senderId: msg.user_id,
-      }))
-      
-      setMessages((prev) => ({
-        ...prev,
-        [chatId]: formattedMessages,
-      }))
+        })
+        setChats((prev) =>
+          prev.map((chat) =>
+            chat.id === chatId
+              ? {
+                  ...chat,
+                  lastMessage: last.content,
+                  time: timeStr,
+                  lastActivityAt: Number.isFinite(lastTs) ? lastTs : Date.now(),
+                }
+              : chat,
+          ),
+        )
+      }
     })
 
     socket.on("chat:room_created", (data) => {
       const { room } = data
-      const newRoom = {
+      const now = Date.now()
+      const newRoom: Chat = {
         id: String(room.id),
         name: room.name,
         lastMessage: "",
         time: new Date().toLocaleTimeString(),
         unread: 0,
         status: "active",
+        role: "",
         description: room.description,
-        pinned: false
+        pinned: false,
+        lastActivityAt: now,
       }
 
       setChats((prev) => [newRoom, ...prev])
       setSelectedChat(String(room.id))
+      socket.emit("chat:join_room", { roomId: Number(room.id) })
     })
 
     socket.on("chat:room_invitation", (data) => {
       const { room, inviterName } = data
-      const newRoom = {
+      const now = Date.now()
+      const newRoom: Chat = {
         id: String(room.id),
-        name: inviterName ?? room.name,
+        name: room.name,
         lastMessage: "",
         time: new Date().toLocaleTimeString(),
         unread: 1,
         status: "active",
-        description: room.description,
-        pinned: false
+        role: "",
+        description:
+          room.description ||
+          (inviterName ? `Invited by ${inviterName}` : undefined),
+        pinned: false,
+        lastActivityAt: now,
       }
 
       setChats((prev) => {
@@ -240,6 +341,7 @@ export function ChatPage({ user, token }: ChatPageProps) {
           return [newRoom, ...prev]
         }
       })
+      socket.emit("chat:join_room", { roomId: Number(room.id) })
     })
 
     socket.on("chat:message_edited", (data) => {
@@ -296,8 +398,12 @@ export function ChatPage({ user, token }: ChatPageProps) {
       )
     })
 
+    requestJoins()
+
     return () => {
       console.log("🧹 Cleaning up WebSocket listeners...")
+      socket.off("connect", requestJoins)
+      socket.off("reconnect", requestJoins)
       socket.off("chat:new_message")
       socket.off("chat:history")
       socket.off("chat:room_created")
@@ -309,17 +415,39 @@ export function ChatPage({ user, token }: ChatPageProps) {
     }
   }, [token, user.id])
 
-  const selectedChatRef = useRef<string | null>(null)
-  selectedChatRef.current = selectedChat
+  // Join selected room for history (listeners are already registered above).
+  useEffect(() => {
+    if (!selectedChat) return
+    const socket = getSocket(token)
+    socket.emit("chat:join_room", { roomId: Number(selectedChat) })
+  }, [selectedChat, token])
+
+  // Join all rooms for realtime (listeners already registered).
+  useEffect(() => {
+    const socket = getSocket(token)
+    if (chats.length === 0) return
+    for (const chat of chats) {
+      socket.emit("chat:join_room", { roomId: Number(chat.id) })
+    }
+  }, [chats, token])
+
+  const chatsSortedByRecent = useMemo(
+    () =>
+      [...chats].sort(
+        (a, b) => (b.lastActivityAt ?? 0) - (a.lastActivityAt ?? 0),
+      ),
+    [chats],
+  )
 
   const filteredChats = useMemo(() => {
     const query = search.trim().toLowerCase()
-    if (!query) return chats
-    return chats.filter(
+    if (!query) return chatsSortedByRecent
+    return chatsSortedByRecent.filter(
       (chat) =>
-        chat.name.toLowerCase().includes(query) || chat.lastMessage.toLowerCase().includes(query),
+        chat.name.toLowerCase().includes(query) ||
+        chat.lastMessage.toLowerCase().includes(query),
     )
-  }, [chats, search])
+  }, [chatsSortedByRecent, search])
 
   const filteredPeople = useMemo(() => {
     const query = search.trim().toLowerCase()
@@ -382,9 +510,12 @@ export function ChatPage({ user, token }: ChatPageProps) {
       [selectedChat]: [...(prev[selectedChat] ?? []), optimisticMessage],
     }))
 
+    const now = Date.now()
     setChats((prev) =>
       prev.map((chat) =>
-        chat.id === selectedChat ? { ...chat, lastMessage: content, time: "Now" } : chat,
+        chat.id === selectedChat
+          ? { ...chat, lastMessage: content, time: "Now", lastActivityAt: now }
+          : chat,
       ),
     )
 

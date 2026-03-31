@@ -123,11 +123,17 @@ jobs:
           key: ${{ secrets.VM_SSH_KEY }}
           script: |
             set -e
+            
+            cd /home/alexgrama837/DASI
+            git fetch origin
+            git checkout main
+            git pull origin main
+            
             cd ${{ env.VM_APP_PATH }}
-
+            
             CHANGED_SERVICES="${{ needs.detect-services.outputs.services_list }}"
-            echo "Deploying services: $CHANGED_SERVICES"
-
+            echo "Deploying services to production: $CHANGED_SERVICES"
+            
             docker compose -f docker-compose.prod.yaml pull $CHANGED_SERVICES
-            docker compose -f docker-compose.prod.yaml up -d $CHANGED_SERVICES
+            docker compose -f docker-compose.prod.yaml up -d --force-recreate --no-deps $CHANGED_SERVICES
             docker image prune -f
