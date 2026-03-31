@@ -9,18 +9,22 @@ import { map } from "rxjs/operators";
 import { ResultListDto } from "../dto/resultlist.dto";
 import { ResultObjectDto } from "../dto/resultobject.dto";
 
-function isAlreadyWrapped(data: unknown): boolean {
+type WrappedResponse = Record<string, unknown> &
+  ({ object: unknown } | { objects: unknown[] });
+
+function isAlreadyWrapped(data: unknown): data is WrappedResponse {
   if (!data || typeof data !== "object") return false;
   const payload = data as Record<string, unknown>;
-  const hasCommon =
+  const hasCommon = Boolean(
     Object.prototype.hasOwnProperty.call(payload, "error") &&
     Object.prototype.hasOwnProperty.call(payload, "htmlcode") &&
-    Object.prototype.hasOwnProperty.call(payload, "messages");
+    Object.prototype.hasOwnProperty.call(payload, "messages"),
+  );
   if (!hasCommon) return false;
 
-  return (
+  return Boolean(
     Object.prototype.hasOwnProperty.call(payload, "object") ||
-    Object.prototype.hasOwnProperty.call(payload, "objects")
+    Object.prototype.hasOwnProperty.call(payload, "objects"),
   );
 }
 

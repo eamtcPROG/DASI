@@ -11,6 +11,8 @@ import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { genSalt, hash, compare } from 'bcrypt';
 import { ClientProxy } from '@nestjs/microservices';
 import { of } from 'rxjs';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { PasswordResetCode } from '../models/password-reset-code.model';
 
 jest.mock('bcrypt', () => ({
   genSalt: jest.fn().mockResolvedValue('salt'),
@@ -45,6 +47,14 @@ describe('AuthService', () => {
     const mockAnalyticsClient = {
       emit: jest.fn().mockReturnValue(of(true)),
     };
+    const mockNotificationClient = {
+      emit: jest.fn().mockReturnValue(of(true)),
+    };
+    const mockResetCodeRepo = {
+      save: jest.fn(),
+      findOne: jest.fn(),
+      remove: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -52,6 +62,11 @@ describe('AuthService', () => {
         { provide: UserService, useValue: mockUserService },
         { provide: JwtService, useValue: mockJwtService },
         { provide: 'ANALYTICS_SERVICE', useValue: mockAnalyticsClient },
+        { provide: 'NOTIFICATION_SERVICE', useValue: mockNotificationClient },
+        {
+          provide: getRepositoryToken(PasswordResetCode),
+          useValue: mockResetCodeRepo,
+        },
       ],
     }).compile();
 
@@ -144,14 +159,25 @@ describe('AuthService', () => {
       });
       expect(result.access_token).toBe(fakeToken);
       expect(result.user).toEqual(UserDto.fromEntity(createdUser));
-      expect(analyticsClient.emit).toHaveBeenCalledWith('analytics.event', {
-        event: 'user.created',
-        data: expect.objectContaining({
-          userId: createdUser.id,
-          email: createdUser.email,
-          createdAt: expect.any(String),
+      expect(analyticsClient.emit).toHaveBeenCalledWith(
+        'analytics.event',
+        expect.objectContaining({
+          event: 'user.created',
         }),
-      });
+      );
+
+      const emitPayload = analyticsClient.emit.mock.calls[0]?.[1] as {
+        event: string;
+        data: {
+          userId: number;
+          email: string;
+          createdAt: string;
+        };
+      };
+      expect(emitPayload.event).toBe('user.created');
+      expect(emitPayload.data.userId).toBe(createdUser.id);
+      expect(emitPayload.data.email).toBe(createdUser.email);
+      expect(typeof emitPayload.data.createdAt).toBe('string');
     });
   });
 

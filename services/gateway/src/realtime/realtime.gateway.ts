@@ -146,9 +146,7 @@ export class RealtimeGateway
   ): Promise<number[]> {
     const normalized = [
       ...new Set(
-        emails
-          .map((e) => e.trim().toLowerCase())
-          .filter((e) => e.length > 0),
+        emails.map((e) => e.trim().toLowerCase()).filter((e) => e.length > 0),
       ),
     ];
 
