@@ -210,6 +210,8 @@ services:
       dockerfile: Dockerfile
     env_file:
       - ./notification/env/.env.production
+      - path: ./notification/env/.env.secrets
+        required: false
     ports:
       - ${NOTIFICATION_PORT:-3005}:3005
     environment:

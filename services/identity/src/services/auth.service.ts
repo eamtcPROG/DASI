@@ -131,7 +131,7 @@ export class AuthService {
     const html = `
       <div style="font-family:sans-serif;max-width:480px;margin:auto">
         <h2>Reset your password</h2>
-        <p>Use the code below to reset your DASI password. It expires in 15 minutes.</p>
+        <p>Use the code below to reset your CONVERSO password. It expires in 15 minutes.</p>
         <div style="font-size:36px;font-weight:bold;letter-spacing:8px;padding:24px;background:#f4f4f5;border-radius:12px;text-align:center">
           ${code}
         </div>
@@ -144,9 +144,9 @@ export class AuthService {
     this.notificationClient
       .send('send_email', {
         to: email,
-        subject: 'Your DASI password reset code',
+        subject: 'Your CONVERSO password reset code',
         html,
-        text: `Your DASI password reset code is: ${code}\n\nIt expires in 15 minutes.`,
+        text: `Your CONVERSO password reset code is: ${code}\n\nIt expires in 15 minutes.`,
       })
       .subscribe({
         error: (err) => console.error('Failed to send reset email', err),
