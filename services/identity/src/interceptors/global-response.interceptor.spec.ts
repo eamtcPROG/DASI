@@ -67,7 +67,10 @@ describe('GlobalResponseInterceptor', () => {
 
   it('wraps non-array payloads into ResultObjectDto', async () => {
     const result = await lastValueFrom(
-      interceptor.intercept(createContext(202), createCallHandler({ foo: 'bar' })),
+      interceptor.intercept(
+        createContext(202),
+        createCallHandler({ foo: 'bar' }),
+      ),
     );
 
     expect(result).toBeInstanceOf(ResultObjectDto);

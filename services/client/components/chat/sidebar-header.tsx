@@ -2,7 +2,8 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { BarChart3, BellDot, LogOut, MessageCircle, Plus, Search, ShieldCheck } from "lucide-react"
+import Image from "next/image"
+import { BarChart3, BellDot, LogOut, Plus, Search, ShieldCheck } from "lucide-react"
 
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { Button } from "@/components/ui/button"
@@ -48,11 +49,11 @@ export function SidebarHeader({
     <div className="border-b border-border/70 bg-sidebar/80 px-4 pb-4 pt-5">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary shadow-lg shadow-primary/20">
-            <MessageCircle className="size-5 text-primary-foreground" />
+          <div className="flex items-center justify-center">
+             <Image src="/web-app-manifest-512x512.png" alt="Logo" width={40} height={40} className="size-8" />
           </div>
           <div>
-            <p className="font-semibold text-foreground">Messenger</p>
+            <p className="font-semibold text-foreground">Converso</p>
             <p className="text-xs text-muted-foreground">Protected workspace</p>
           </div>
         </div>

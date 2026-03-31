@@ -2,10 +2,7 @@ import { Controller, Get, UseGuards } from "@nestjs/common";
 import { Query } from "@nestjs/common";
 import { ApiBearerAuth, ApiOkResponse, ApiTags } from "@nestjs/swagger";
 import { JwtGuard } from "../auth/jwt.guard";
-import {
-  AnalyticsProxyService,
-  type AnalyticsStats,
-} from "../services/analytics-proxy.service";
+import { AnalyticsProxyService } from "../services/analytics-proxy.service";
 import { ChatProxyService } from "../services/chat-proxy.service";
 
 type RangeKey = "1m" | "1h" | "1d" | "7d" | "30d";

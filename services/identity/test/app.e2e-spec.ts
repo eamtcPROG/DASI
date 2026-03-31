@@ -5,6 +5,73 @@ import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { GlobalExceptionFilter } from '../src/filters/global-exception.filter';
 
+type MessageItem = { message: string };
+type ResultObjectBody<T> = {
+  error: boolean;
+  htmlcode?: number;
+  messages?: MessageItem[];
+  object: T;
+};
+
+type ResultListBody<T> = {
+  error: boolean;
+  htmlcode?: number;
+  messages?: MessageItem[];
+  objects: T[];
+  total: number;
+  totalpages: number;
+};
+
+type AuthUser = {
+  id: number;
+  email: string;
+  firstName: string;
+  lastName: string;
+};
+
+type AuthObject = {
+  access_token: string;
+  user: AuthUser;
+};
+
+function asRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object') return {};
+  return value as Record<string, unknown>;
+}
+
+function asMessages(value: unknown): MessageItem[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => asRecord(entry))
+    .map((entry) => ({
+      message: typeof entry['message'] === 'string' ? entry['message'] : '',
+    }));
+}
+
+function asResultObject<T>(value: unknown): ResultObjectBody<T> {
+  const body = asRecord(value);
+  return {
+    error: Boolean(body['error']),
+    htmlcode:
+      typeof body['htmlcode'] === 'number' ? body['htmlcode'] : undefined,
+    messages: asMessages(body['messages']),
+    object: body['object'] as T,
+  };
+}
+
+function asResultList<T>(value: unknown): ResultListBody<T> {
+  const body = asRecord(value);
+  return {
+    error: Boolean(body['error']),
+    htmlcode:
+      typeof body['htmlcode'] === 'number' ? body['htmlcode'] : undefined,
+    messages: asMessages(body['messages']),
+    objects: Array.isArray(body['objects']) ? (body['objects'] as T[]) : [],
+    total: typeof body['total'] === 'number' ? body['total'] : 0,
+    totalpages: typeof body['totalpages'] === 'number' ? body['totalpages'] : 0,
+  };
+}
+
 describe('User API (e2e)', () => {
   let app: INestApplication<App>;
 
@@ -42,14 +109,15 @@ describe('User API (e2e)', () => {
           expect([200, 201]).toContain(res.status);
         });
 
-      expect(res.body.error).toBe(false);
-      expect(res.body.object).toBeDefined();
-      expect(res.body.object.access_token).toBeDefined();
-      expect(res.body.object.user).toBeDefined();
-      expect(res.body.object.user.email).toBe(email.toLowerCase());
-      expect(res.body.object.user.firstName).toBe('John');
-      expect(res.body.object.user.lastName).toBe('Doe');
-      expect(res.body.object.user.id).toBeDefined();
+      const result = asResultObject<AuthObject>(res.body);
+      expect(result.error).toBe(false);
+      expect(result.object).toBeDefined();
+      expect(result.object.access_token).toBeDefined();
+      expect(result.object.user).toBeDefined();
+      expect(result.object.user.email).toBe(email.toLowerCase());
+      expect(result.object.user.firstName).toBe('John');
+      expect(result.object.user.lastName).toBe('Doe');
+      expect(result.object.user.id).toBeDefined();
     });
 
     it('returns 400 when email or password is missing', async () => {
@@ -58,13 +126,13 @@ describe('User API (e2e)', () => {
         .send({})
         .expect(400);
 
-      expect(res.body.error).toBe(true);
-      expect(res.body.htmlcode).toBe(400);
-      expect(res.body.messages).toBeDefined();
+      const result = asResultObject<Record<string, unknown>>(res.body);
+      expect(result.error).toBe(true);
+      expect(result.htmlcode).toBe(400);
+      expect(result.messages).toBeDefined();
       expect(
-        res.body.messages.some(
-          (m: { message: string }) =>
-            m.message && m.message.toLowerCase().includes('required'),
+        result.messages?.some((m) =>
+          m.message.toLowerCase().includes('required'),
         ),
       ).toBe(true);
     });
@@ -90,12 +158,12 @@ describe('User API (e2e)', () => {
         .send(body)
         .expect(400);
 
-      expect(res.body.error).toBe(true);
-      expect(res.body.messages).toBeDefined();
+      const result = asResultObject<Record<string, unknown>>(res.body);
+      expect(result.error).toBe(true);
+      expect(result.messages).toBeDefined();
       expect(
-        res.body.messages.some(
-          (m: { message: string }) =>
-            m.message && m.message.includes('Email already in use'),
+        result.messages?.some((m) =>
+          m.message.includes('Email already in use'),
         ),
       ).toBe(true);
     });
@@ -122,10 +190,11 @@ describe('User API (e2e)', () => {
         .send({ email, password })
         .expect(200);
 
-      expect(res.body.error).toBe(false);
-      expect(res.body.object.access_token).toBeDefined();
-      expect(res.body.object.user).toBeDefined();
-      expect(res.body.object.user.email).toBe(email.toLowerCase());
+      const result = asResultObject<AuthObject>(res.body);
+      expect(result.error).toBe(false);
+      expect(result.object.access_token).toBeDefined();
+      expect(result.object.user).toBeDefined();
+      expect(result.object.user.email).toBe(email.toLowerCase());
     });
 
     it('returns 401 for invalid credentials', async () => {
@@ -137,22 +206,18 @@ describe('User API (e2e)', () => {
         })
         .expect(401);
 
-      expect(res.body.error).toBe(true);
-      expect(res.body.messages).toBeDefined();
+      const result = asResultObject<Record<string, unknown>>(res.body);
+      expect(result.error).toBe(true);
+      expect(result.messages).toBeDefined();
       expect(
-        res.body.messages.some(
-          (m: { message: string }) =>
-            m.message && m.message.includes('Invalid credentials'),
-        ),
+        result.messages?.some((m) => m.message.includes('Invalid credentials')),
       ).toBe(true);
     });
   });
 
   describe('GET /user/refresh', () => {
     it('returns 401 without Authorization header', async () => {
-      await request(app.getHttpServer())
-        .get('/user/refresh')
-        .expect(401);
+      await request(app.getHttpServer()).get('/user/refresh').expect(401);
     });
 
     it('returns 200 with new token and user when Bearer token is valid', async () => {
@@ -170,17 +235,19 @@ describe('User API (e2e)', () => {
           expect([200, 201]).toContain(res.status);
         });
 
-      const token = signUpRes.body.object.access_token;
+      const signUpResult = asResultObject<AuthObject>(signUpRes.body);
+      const token = signUpResult.object.access_token;
 
       const res = await request(app.getHttpServer())
         .get('/user/refresh')
         .set('Authorization', `Bearer ${token}`)
         .expect(200);
 
-      expect(res.body.error).toBe(false);
-      expect(res.body.object.access_token).toBeDefined();
-      expect(res.body.object.user).toBeDefined();
-      expect(res.body.object.user.email).toBe(email.toLowerCase());
+      const result = asResultObject<AuthObject>(res.body);
+      expect(result.error).toBe(false);
+      expect(result.object.access_token).toBeDefined();
+      expect(result.object.user).toBeDefined();
+      expect(result.object.user.email).toBe(email.toLowerCase());
     });
   });
 
@@ -204,17 +271,19 @@ describe('User API (e2e)', () => {
           expect([200, 201]).toContain(res.status);
         });
 
-      const token = signUpRes.body.object.access_token;
+      const signUpResult = asResultObject<AuthObject>(signUpRes.body);
+      const token = signUpResult.object.access_token;
 
       const res = await request(app.getHttpServer())
         .get('/user/')
         .set('Authorization', `Bearer ${token}`)
         .expect(200);
 
-      expect(res.body.error).toBe(false);
-      expect(Array.isArray(res.body.objects)).toBe(true);
-      expect(typeof res.body.total).toBe('number');
-      expect(typeof res.body.totalpages).toBe('number');
+      const result = asResultList<AuthUser>(res.body);
+      expect(result.error).toBe(false);
+      expect(Array.isArray(result.objects)).toBe(true);
+      expect(typeof result.total).toBe('number');
+      expect(typeof result.totalpages).toBe('number');
     });
   });
 });

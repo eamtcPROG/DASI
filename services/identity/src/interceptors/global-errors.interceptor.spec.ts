@@ -1,4 +1,8 @@
-import { BadRequestException, CallHandler, HttpException } from '@nestjs/common';
+import {
+  BadRequestException,
+  CallHandler,
+  HttpException,
+} from '@nestjs/common';
 import { throwError, lastValueFrom } from 'rxjs';
 import { GlobalErrorsInterceptor } from './global-errors.interceptor';
 
@@ -20,7 +24,9 @@ describe('GlobalErrorsInterceptor', () => {
   };
 
   it('preserves status and string payload from HttpException', async () => {
-    const exception = await runWithError(new BadRequestException('Invalid body'));
+    const exception = await runWithError(
+      new BadRequestException('Invalid body'),
+    );
 
     expect(exception.getStatus()).toBe(400);
     expect(exception.getResponse()).toEqual({ message: 'Invalid body' });
