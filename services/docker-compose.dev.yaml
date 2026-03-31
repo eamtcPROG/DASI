@@ -10,7 +10,6 @@ services:
   client:
     <<: *app-service
     container_name: client
-    image: europe-central2-docker.pkg.dev/dasi-491416/dasi/client:latest
     environment:
       NODE_ENV: production
       PORT: 3000
@@ -38,7 +37,6 @@ services:
   gateway:
     <<: *app-service
     container_name: gateway
-    image: europe-central2-docker.pkg.dev/dasi-491416/dasi/gateway:latest
     env_file:
       - ./gateway/env/.env.production
     ports:
@@ -69,7 +67,6 @@ services:
   identity:
     <<: *app-service
     container_name: identity
-    image: europe-central2-docker.pkg.dev/dasi-491416/dasi/identity:latest
     env_file:
       - ./identity/env/.env.production
     ports:
@@ -97,7 +94,6 @@ services:
   chat:
     <<: *app-service
     container_name: chat
-    image: europe-central2-docker.pkg.dev/dasi-491416/dasi/chat:latest
     env_file:
       - ./chat/env/.env.production
     ports:
@@ -113,7 +109,6 @@ services:
   notification:
     <<: *app-service
     container_name: notification
-    image: europe-central2-docker.pkg.dev/dasi-491416/dasi/notification:latest
     env_file:
       - ./notification/env/.env.production
       - path: ./notification/env/.env.secrets
@@ -141,7 +136,6 @@ services:
   analytics:
     <<: *app-service
     container_name: analytics-service
-    image: europe-central2-docker.pkg.dev/dasi-491416/dasi/analytics:latest
     env_file:
       - ./analytics/env/.env.production
     ports:
