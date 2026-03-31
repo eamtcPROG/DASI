@@ -1,4 +1,5 @@
 import Link from "next/link"
+import Image from "next/image"
 import {
   ArrowUpRight,
   ArrowRight,
@@ -20,11 +21,11 @@ export default function HomePage() {
       <header className="sticky top-0 z-30 border-b border-border/60 bg-background/80 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
           <Link href="/" className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary shadow-lg shadow-primary/20">
-              <MessageCircle className="h-5 w-5 text-primary-foreground" />
+            <div className="flex items-center justify-center">
+                <Image src="/web-app-manifest-512x512.png" alt="Logo" width={40} height={40} className="size-8" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-foreground">Messenger</p>
+              <p className="text-sm font-semibold text-foreground">Converso</p>
               <p className="text-xs text-muted-foreground">Protected conversations</p>
             </div>
           </Link>
@@ -319,11 +320,11 @@ export default function HomePage() {
       <footer className="border-t border-border/60 px-6 py-8">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 md:flex-row">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary">
-              <MessageCircle className="h-4 w-4 text-primary-foreground" />
-            </div>
+              <div className="flex items-center justify-center">
+                  <Image src="/web-app-manifest-512x512.png" alt="Logo" width={40} height={40} className="size-8" />
+              </div>
             <div>
-              <p className="font-medium text-foreground">Messenger</p>
+              <p className="font-medium text-foreground">Converso</p>
               <p className="text-sm text-muted-foreground">Calmer messaging for modern teams.</p>
             </div>
           </div>
