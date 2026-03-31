@@ -2,7 +2,7 @@
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, MoreVertical, Phone, Video, LogOut, Users } from "lucide-react"
+import { ArrowLeft, MoreVertical, LogOut, Users } from "lucide-react"
 
 interface ChatHeaderProps {
   name: string
@@ -17,7 +17,6 @@ interface ChatHeaderProps {
 
 export function ChatHeader({
   name,
-  status,
   description,
   unreadCount,
   onBack,
@@ -77,12 +76,6 @@ export function ChatHeader({
             title="Show members"
           >
             <Users className="size-5" />
-          </Button>
-          <Button variant="outline" size="icon" className="rounded-xl border-border/70 bg-background/80">
-            <Video className="size-5" />
-          </Button>
-          <Button variant="outline" size="icon" className="rounded-xl border-border/70 bg-background/80">
-            <Phone className="size-5" />
           </Button>
           {onLeaveRoom && (
             <Button 
