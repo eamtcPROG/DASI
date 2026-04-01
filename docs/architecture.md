@@ -31,30 +31,24 @@ flowchart LR
     IdentityDB[(PostgreSQL identity)]
     ChatDB[(PostgreSQL chat)]
     AnalyticsDB[(MongoDB analytics)]
-    SMTP[(SMTP / preview mail)]
+    
 
     Browser --> Client
     Client -->|HTTP route handlers| Gateway
     Client -->|Socket.IO| Gateway
 
-    Gateway -->|RMQ RPC| RabbitMQ
+    Gateway --> RabbitMQ
     RabbitMQ --> Identity
     RabbitMQ --> Chat
     RabbitMQ --> Analytics
     RabbitMQ --> Notification
 
-    Gateway -->|HTTP reads| Analytics
-    Gateway -->|HTTP lookups for realtime| Identity
     Gateway --> Redis
 
     Identity --> IdentityDB
     Chat --> ChatDB
     Analytics --> AnalyticsDB
-    Notification --> SMTP
-
-    Identity -->|analytics.event| RabbitMQ
-    Identity -->|send_email| RabbitMQ
-    Gateway -->|analytics.event| RabbitMQ
+    
 ```
 
 ## Architectural principles
@@ -223,8 +217,6 @@ The notification service has no dedicated application database in this repositor
 | Browser client | Gateway | Socket.IO | Realtime chat and direct message interactions |
 | Gateway | Identity | RabbitMQ | Auth and user-related commands |
 | Gateway | Chat | RabbitMQ | Chat queries and mutations |
-| Gateway | Analytics | HTTP | Read analytics dashboards and time-series data |
-| Gateway | Identity | HTTP | Resolve user info during realtime enrichment |
 | Identity | Analytics | RabbitMQ event | Record `user.created` events |
 | Gateway | Analytics | RabbitMQ event | Record `message.created` and `room.created` events |
 | Identity | Notification | RabbitMQ command | Send password reset emails |
@@ -636,10 +628,3 @@ This stack includes:
 - Gateway health includes realtime metadata.
 - Analytics writes are best-effort from the producer side so analytics failures do not block the main user path.
 - The gateway is the recommended public realtime surface even though the chat service also contains its own Socket.IO gateway.
-
-## Recommended integration path
-
-1. Use the client for user-facing experiences.
-2. Route external API consumers through the gateway first.
-3. Treat direct service APIs as internal integration surfaces unless a use case explicitly requires them.
-4. Keep domain ownership aligned with service-owned data stores and queues.
