@@ -45,6 +45,8 @@ type ChatEventPayload = {
     roomId?: number;
     userId?: number;
     content?: string;
+    messageType?: string;
+    fileName?: string | null;
     name?: string;
     description?: string | null;
     creatorId?: number;
@@ -169,7 +171,8 @@ export class ChatEventController {
           break;
         case "send_message": {
           // Handle send message - save to database and broadcast
-          const { roomId, userId, content } = data.payload;
+          const { roomId, userId, content, messageType, fileName } =
+            data.payload;
           if (roomId === undefined || userId === undefined || !content) {
             return new ResultObjectDto(null, true, 400, [
               { type: 2, message: "Invalid send message payload" },
@@ -180,6 +183,8 @@ export class ChatEventController {
             roomId,
             userId,
             content,
+            messageType,
+            fileName,
           });
 
           // Broadcast message to all users in the room via ChatGateway

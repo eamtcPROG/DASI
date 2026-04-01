@@ -13,6 +13,8 @@ interface Message {
   isEdited?: boolean
   senderName?: string
   senderId?: number
+  messageType?: string
+  fileName?: string | null
 }
 
 interface MessageListProps {
@@ -126,6 +128,18 @@ export function MessageList({ messages, onEditMessage, onDeleteMessage }: Messag
                     Save
                   </button>
                 </div>
+              </div>
+            ) : message.messageType === "image" ? (
+              <div className="space-y-1">
+                <img
+                  src={message.content}
+                  alt={message.fileName || "Image"}
+                  className="max-h-64 max-w-full rounded-xl object-contain cursor-pointer"
+                  onClick={() => window.open(message.content, "_blank")}
+                />
+                {message.fileName && (
+                  <p className="text-xs text-muted-foreground truncate">{message.fileName}</p>
+                )}
               </div>
             ) : (
               <p className="text-sm leading-7">{message.content}</p>
