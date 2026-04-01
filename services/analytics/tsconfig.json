@@ -10,6 +10,7 @@
     "outDir": "./dist",
     "baseUrl": "./",
     "skipLibCheck": true,
+    "isolatedModules": true,
     "strictNullChecks": true,
     "noImplicitAny": false
   }
