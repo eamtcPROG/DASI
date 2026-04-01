@@ -21,7 +21,7 @@ export class AnalyticsEventsService {
           .pipe(timeout(2000)),
       );
     } catch (error) {
-      // Best-effort: analytics must not break the main flow.
+      // Best-effort: analytics must not break  the main flow.
       if (error instanceof TimeoutError) return;
       return;
     }

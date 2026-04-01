@@ -84,3 +84,49 @@ jobs:
           docker build \
             -t local/${{ matrix.service }}:ci-check \
             ./${{ env.SERVICES_DIR }}/${{ matrix.service }}
+
+  unit-tests:
+    needs: detect-services
+    if: needs.detect-services.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.detect-services.outputs.matrix) }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node (npm services)
+        if: matrix.service != 'client'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: services/${{ matrix.service }}/package-lock.json
+
+      - name: Setup pnpm (client)
+        if: matrix.service == 'client'
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node (client)
+        if: matrix.service == 'client'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: services/client/pnpm-lock.yaml
+
+      - name: Install dependencies and run unit tests
+        working-directory: services/${{ matrix.service }}
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.service }}" = "client" ]; then
+            pnpm install --frozen-lockfile
+            pnpm run --if-present test -- --passWithNoTests
+          else
+            npm ci
+            npm run test --if-present -- --passWithNoTests
+          fi

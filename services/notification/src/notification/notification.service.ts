@@ -30,7 +30,7 @@ export class NotificationService {
 
     if (!host) {
       this.logger.warn(
-        'SMTP_HOST is not configured — emails will be logged only (preview mode)',
+        'SMTP_HOST is not configured — emails will be logged only  (preview mode)',
       );
       this.isPreview && void this.createEtherealTransporter();
       return;
