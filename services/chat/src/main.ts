@@ -36,7 +36,7 @@ async function bootstrap() {
   const config = new DocumentBuilder()
     .setTitle("API Chat Service")
     .setDescription(
-      "HTTP API for the Chat service. Provides chat about messages, users, and other platform metrics with versioned endpoints, validation, and standard error responses.",
+      "HTTP API for the Chat service. Provides chat about messages, users, and other  platform metrics with versioned endpoints, validation, and standard error responses.",
     )
     .addBearerAuth(
       {

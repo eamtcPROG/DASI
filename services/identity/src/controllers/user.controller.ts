@@ -55,7 +55,7 @@ export class UserController {
   @Post('/sign-up')
   signUp(@Body() body: CreateUserDto) {
     if (!body.email || !body.password) {
-      throw new BadRequestException('Email and password are required');
+      throw new BadRequestException('Email and password are required ');
     }
     return this.authService.signUp(body);
   }
