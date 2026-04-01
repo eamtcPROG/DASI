@@ -29,6 +29,8 @@ type Message = {
   isEdited?: boolean
   senderName?: string
   senderId?: number
+  messageType?: string
+  fileName?: string | null
 }
 
 type Chat = {
@@ -114,6 +116,7 @@ export function ChatPage({ user, token }: ChatPageProps) {
   const [showMembersModal, setShowMembersModal] = useState(false)
   const [allUsers, setAllUsers] = useState<UserDto[]>([])
   const typingTimeouts = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map())
+  const joinedRoomsRef = useRef<Set<string>>(new Set())
   const chatsRef = useRef<Chat[]>([])
   chatsRef.current = chats
   const selectedChatRef = useRef<string | null>(null)
@@ -166,13 +169,19 @@ export function ChatPage({ user, token }: ChatPageProps) {
     const socket = getSocket(token)
 
     const requestJoins = () => {
+      // Server-side room state is reset on reconnect, so clear our tracking set.
+      joinedRoomsRef.current.clear()
       const sock = getSocket(token)
       const sel = selectedChatRef.current
       if (sel) {
         sock.emit("chat:join_room", { roomId: Number(sel) })
+        joinedRoomsRef.current.add(sel)
       }
       for (const c of chatsRef.current) {
-        sock.emit("chat:join_room", { roomId: Number(c.id) })
+        if (!joinedRoomsRef.current.has(c.id)) {
+          sock.emit("chat:join_room", { roomId: Number(c.id) })
+          joinedRoomsRef.current.add(c.id)
+        }
       }
     }
 
@@ -193,11 +202,13 @@ export function ChatPage({ user, token }: ChatPageProps) {
         sent: message.user_id === user.id,
         read: false,
         senderName: message.user_id === user.id ? undefined : (
-          message.user?.firstName && message.user?.lastName 
+          message.user?.firstName && message.user?.lastName
             ? `${message.user.firstName} ${message.user.lastName}`
             : message.user?.firstName || message.user?.lastName || message.user?.email || `User ${message.user_id}`
         ),
         senderId: message.user_id,
+        messageType: message.message_type ?? "text",
+        fileName: message.file_name ?? null,
       }
 
       setMessages((prev) => ({
@@ -205,13 +216,14 @@ export function ChatPage({ user, token }: ChatPageProps) {
         [chatId]: [...(prev[chatId] ?? []), newMessage],
       }))
 
+      const sidebarPreview = message.message_type === "image" ? "Sent an image" : message.content
       const msgTs = new Date(message.created_at).getTime()
       setChats((prev) =>
         prev.map((chat) =>
           chat.id === chatId
             ? {
                 ...chat,
-                lastMessage: message.content,
+                lastMessage: sidebarPreview,
                 time: "Now",
                 lastActivityAt: Number.isFinite(msgTs) ? msgTs : Date.now(),
                 unread:
@@ -255,11 +267,21 @@ export function ChatPage({ user, token }: ChatPageProps) {
                   msg.user?.email ||
                   `User ${msg.user_id}`,
           senderId: msg.user_id,
+          messageType: msg.message_type ?? "text",
+          fileName: msg.file_name ?? null,
         }))
+
+        // Preserve optimistic messages not yet confirmed by the server.
+        // The gateway excludes the sender from chat:new_message broadcasts,
+        // so pending messages won't be replaced until the next full history
+        // fetch that includes them.
+        const pendingMessages = existing.filter(
+          (m) => m.id.startsWith("pending-"),
+        )
 
         return {
           ...prev,
-          [chatId]: formattedMessages,
+          [chatId]: [...formattedMessages, ...pendingMessages],
         }
       })
 
@@ -268,6 +290,7 @@ export function ChatPage({ user, token }: ChatPageProps) {
         const last = list[list.length - 1] as {
           content: string
           created_at: string
+          message_type?: string
         }
         const lastTs = new Date(last.created_at).getTime()
         const timeStr = new Date(last.created_at).toLocaleTimeString("en-US", {
@@ -275,12 +298,13 @@ export function ChatPage({ user, token }: ChatPageProps) {
           minute: "2-digit",
           hour12: false,
         })
+        const lastPreview = last.message_type === "image" ? "Sent an image" : last.content
         setChats((prev) =>
           prev.map((chat) =>
             chat.id === chatId
               ? {
                   ...chat,
-                  lastMessage: last.content,
+                  lastMessage: lastPreview,
                   time: timeStr,
                   lastActivityAt: Number.isFinite(lastTs) ? lastTs : Date.now(),
                 }
@@ -411,6 +435,7 @@ export function ChatPage({ user, token }: ChatPageProps) {
       socket.off("chat:typing")
       socket.off("chat:message_edited")
       socket.off("chat:message_deleted")
+      joinedRoomsRef.current.clear()
       disconnectSocket()
     }
   }, [token, user.id])
@@ -418,16 +443,23 @@ export function ChatPage({ user, token }: ChatPageProps) {
   // Join selected room for history (listeners are already registered above).
   useEffect(() => {
     if (!selectedChat) return
+    if (joinedRoomsRef.current.has(selectedChat)) return
     const socket = getSocket(token)
     socket.emit("chat:join_room", { roomId: Number(selectedChat) })
+    joinedRoomsRef.current.add(selectedChat)
   }, [selectedChat, token])
 
-  // Join all rooms for realtime (listeners already registered).
+  // Join NEW rooms for realtime (listeners already registered).
+  // Only emits join_room for rooms not already tracked, so history isn't
+  // re-fetched unnecessarily (which would wipe optimistic messages).
   useEffect(() => {
     const socket = getSocket(token)
     if (chats.length === 0) return
     for (const chat of chats) {
-      socket.emit("chat:join_room", { roomId: Number(chat.id) })
+      if (!joinedRoomsRef.current.has(chat.id)) {
+        socket.emit("chat:join_room", { roomId: Number(chat.id) })
+        joinedRoomsRef.current.add(chat.id)
+      }
     }
   }, [chats, token])
 
@@ -526,6 +558,49 @@ export function ChatPage({ user, token }: ChatPageProps) {
     })
   }
 
+  const handleSendFile = (base64: string, fileName: string) => {
+    if (!selectedChat) return
+
+    const socket = getSocket(token)
+    const roomId = Number(selectedChat)
+
+    const optimisticMessage: Message = {
+      id: `pending-${Date.now()}`,
+      content: base64,
+      time: new Date().toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }),
+      sent: true,
+      read: false,
+      messageType: "image",
+      fileName,
+    }
+
+    setMessages((prev) => ({
+      ...prev,
+      [selectedChat]: [...(prev[selectedChat] ?? []), optimisticMessage],
+    }))
+
+    const now = Date.now()
+    setChats((prev) =>
+      prev.map((chat) =>
+        chat.id === selectedChat
+          ? { ...chat, lastMessage: "Sent an image", time: "Now", lastActivityAt: now }
+          : chat,
+      ),
+    )
+
+    socket.emit("chat:send_message", {
+      roomId,
+      userId: user.id,
+      content: base64,
+      messageType: "image",
+      fileName,
+    })
+  }
+
   const handleEditMessage = (messageId: string, newContent: string) => {
     if (!selectedChat) return
     const socket = getSocket(token)
@@ -593,13 +668,16 @@ export function ChatPage({ user, token }: ChatPageProps) {
     setChats((prev) =>
       prev.map((chat) => (chat.id === id ? { ...chat, unread: 0 } : chat)),
     )
-    
-    // Join the room to get history
-    const socket = getSocket(token)
-    socket.emit("chat:join_room", {
-      roomId: Number(id),
-      userId: user.id
-    })
+
+    // Join the room to get history (only if not already joined)
+    if (!joinedRoomsRef.current.has(id)) {
+      const socket = getSocket(token)
+      socket.emit("chat:join_room", {
+        roomId: Number(id),
+        userId: user.id
+      })
+      joinedRoomsRef.current.add(id)
+    }
   }
 
   const selectedChatTyping =
@@ -735,7 +813,7 @@ export function ChatPage({ user, token }: ChatPageProps) {
                   onDeleteMessage={handleDeleteMessage}
                 />
               </div>
-              <MessageInput onSend={handleSendMessage} />
+              <MessageInput onSend={handleSendMessage} onSendFile={handleSendFile} />
             </>
           ) : (
             <div className="flex flex-1 items-center justify-center p-6">

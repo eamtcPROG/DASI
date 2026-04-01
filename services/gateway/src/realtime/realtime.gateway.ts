@@ -53,6 +53,7 @@ type SendMessageResult = {
     origin: SOCKET_CORS_ORIGINS,
     credentials: true,
   },
+  maxHttpBufferSize: 10e6, // 10 MB — Base64 images can reach ~7 MB for a 5 MB file
 })
 export class RealtimeGateway
   implements OnGatewayConnection, OnGatewayDisconnect
@@ -294,7 +295,13 @@ export class RealtimeGateway
   @SubscribeMessage("chat:send_message")
   async handleChatSendMessage(
     @ConnectedSocket() client: TypedSocket,
-    @MessageBody() payload: { roomId: number; content: string },
+    @MessageBody()
+    payload: {
+      roomId: number;
+      content: string;
+      messageType?: string;
+      fileName?: string | null;
+    },
   ) {
     const sender = client.data.user;
     if (!sender || !payload?.roomId || !payload?.content) return;
@@ -309,6 +316,8 @@ export class RealtimeGateway
           roomId: payload.roomId,
           userId: sender.id,
           content: payload.content,
+          messageType: payload.messageType,
+          fileName: payload.fileName,
         },
       );
 

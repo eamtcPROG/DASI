@@ -20,8 +20,13 @@ export class ChatService {
    */
   private async getLatestMessagesForRooms(
     roomIds: number[],
-  ): Promise<Map<number, { content: string; created_at: Date }>> {
-    const map = new Map<number, { content: string; created_at: Date }>();
+  ): Promise<
+    Map<number, { content: string; created_at: Date; message_type: string }>
+  > {
+    const map = new Map<
+      number,
+      { content: string; created_at: Date; message_type: string }
+    >();
     if (roomIds.length === 0) {
       return map;
     }
@@ -45,7 +50,11 @@ export class ChatService {
       .getMany();
 
     for (const m of messages) {
-      map.set(m.room_id, { content: m.content, created_at: m.created_at });
+      map.set(m.room_id, {
+        content: m.content,
+        created_at: m.created_at,
+        message_type: m.message_type,
+      });
     }
     return map;
   }
@@ -69,11 +78,17 @@ export class ChatService {
 
     return roomMembers.map((roomMember) => {
       const latest = latestByRoom.get(roomMember.room_id);
+      const lastMessage =
+        latest == null
+          ? null
+          : latest.message_type === "image"
+            ? "Sent an image"
+            : latest.content;
       return {
         id: roomMember.room.id,
         name: roomMember.room.name,
         description: roomMember.room.description,
-        lastMessage: latest?.content ?? null,
+        lastMessage,
         lastMessageAt: latest?.created_at?.toISOString() ?? null,
       };
     });
@@ -146,11 +161,15 @@ export class ChatService {
     roomId: number;
     userId: number;
     content: string;
+    messageType?: string;
+    fileName?: string | null;
   }): Promise<Message> {
     const message = this.messageRepository.create({
       room_id: data.roomId,
       user_id: data.userId,
       content: data.content,
+      message_type: data.messageType ?? "text",
+      file_name: data.fileName ?? null,
     });
 
     return this.messageRepository.save(message);

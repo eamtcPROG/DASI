@@ -14,6 +14,8 @@ interface ChatMessageData {
   roomId: number;
   userId: number;
   content: string;
+  messageType?: string;
+  fileName?: string | null;
 }
 
 interface ChatRoomData {
@@ -31,6 +33,7 @@ interface ChatSocket extends Socket {
     origin: ["*"],
     credentials: true,
   },
+  maxHttpBufferSize: 10e6, // 10 MB — Base64 images can reach ~7 MB for a 5 MB file
 })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
@@ -110,6 +113,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         roomId: data.roomId,
         userId: data.userId,
         content: data.content,
+        messageType: data.messageType,
+        fileName: data.fileName,
       });
 
       // Broadcast message to all users in the room
