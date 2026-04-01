@@ -67,6 +67,12 @@ export class Message {
   @Column({ type: "text" })
   content: string;
 
+  @Column({ type: "varchar", length: 20, default: "text" })
+  message_type: string; // "text" or "image"
+
+  @Column({ type: "varchar", length: 255, nullable: true })
+  file_name: string | null;
+
   @Column({ type: "timestamp", default: () => "CURRENT_TIMESTAMP" })
   created_at: Date;
 
